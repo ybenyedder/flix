@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -29,7 +31,7 @@ android {
     // `keystore.properties` (or env: ANDROID_KEYSTORE_PWD / ANDROID_KEY_ALIAS /
     // ANDROID_KEY_PWD) — NO LONGER hardcoded (the previous key + password had
     // leaked publicly and have been regenerated).
-    val keystoreProps = java.util.Properties().apply {
+    val keystoreProps = Properties().apply {
         val f = rootProject.file("keystore.properties")
         if (f.exists()) f.inputStream().use { load(it) }
     }
