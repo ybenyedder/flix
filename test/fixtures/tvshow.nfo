@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<tvshow>
+  <title>Dark</title>
+  <year>2017</year>
+  <plot>A family saga with a supernatural twist, set in a German town where the disappearance of two young children exposes the relationships among four families.</plot>
+  <mpaa>TV-MA</mpaa>
+  <status>Ended</status>
+  <studio>Netflix</studio>
+  <premiered>2017-12-01</premiered>
+  <genre>Crime</genre>
+  <genre>Drama</genre>
+  <genre>Mystery</genre>
+  <actor>
+    <name>Louis Hofmann</name>
+    <role>Jonas Kahnwald</role>
+  </actor>
+  <uniqueid type="tvdb">333871</uniqueid>
+</tvshow>

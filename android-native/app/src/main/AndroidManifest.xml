@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- INTERNET/notification/foreground-service/wake-lock permissions are
+         declared once in :core's manifest and merged in automatically.
+         Deliberately NOT requested: REQUEST_INSTALL_PACKAGES (no auto-update
+         flow — Flix has zero self-update, unlike the sibling Auralis client),
+         any storage/media-library permission (the app never touches on-device
+         media, it only talks to the user's own Flix server), location, contacts,
+         camera, microphone. -->
+
+    <!-- Cleartext posture is declared explicitly in res/xml/network_security_config
+         (referenced below) instead of relying only on the blanket
+         usesCleartextTraffic flag: Flix talks to a user-configured LAN http
+         server, so cleartext genuinely can't be disabled — scoping it in a
+         reviewable config makes that an honest, auditable choice rather than a
+         silent "allow cleartext to any host". -->
+    <application
+        android:allowBackup="false"
+        android:icon="@drawable/ic_launcher"
+        android:roundIcon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:theme="@style/Theme.Flix">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|density"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.Flix">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+</manifest>

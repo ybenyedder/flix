@@ -1,0 +1,26 @@
+// Pure display-formatting helpers shared by every component that renders a
+// duration (Card overlay, DetailModal, EpisodeRow) or the « Nouveau » badge
+// (Card).
+
+/** "1 h 42 min" / "48 min" — never negative, rounds to the nearest minute. */
+export function formatDuration(totalSeconds: number): string {
+  // Round to whole minutes FIRST, then split into hours/minutes. Rounding the
+  // within-the-hour remainder separately can carry to 60 (3599s → « 60 min »,
+  // 7199s → « 1 h 60 min ») instead of rolling into the next hour.
+  const totalMinutes = Math.round(Math.max(0, totalSeconds) / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours > 0) return `${hours} h ${String(minutes).padStart(2, "0")} min`;
+  return `${minutes} min`;
+}
+
+/** How long an item wears the « Nouveau » badge after being added. */
+export const NEW_BADGE_WINDOW_MS = 14 * 24 * 3600 * 1000;
+
+/** Whether an item counts as « Nouveau » : added strictly less than 14 days
+ *  ago. An unknown addedAt (0 — the scanner's default) is never new; a
+ *  slightly-future timestamp (clock skew between scanner and browser) still
+ *  is. Pure — `now` is injectable for tests. */
+export function isNew(addedAt: number, now: number = Date.now()): boolean {
+  return addedAt > 0 && now - addedAt < NEW_BADGE_WINDOW_MS;
+}

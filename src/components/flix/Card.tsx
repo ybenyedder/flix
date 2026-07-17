@@ -1,0 +1,279 @@
+"use client";
+
+// The workhorse catalogue card: a 16:9 thumbnail that, on a sustained hover
+// (500ms, matching real Netflix), grows into a small info panel rendered via
+// a portal so it can escape the row's horizontal-scroll clipping. Recently
+// added, never-watched titles wear a small « Nouveau » badge.
+
+import { memo, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { createPortal } from "react-dom";
+import Image from "next/image";
+import { Play, Plus, Check, ThumbsUp, ThumbsDown, ChevronDown } from "lucide-react";
+import { api } from "@/lib/flix/api";
+import type { CatalogEntry } from "@/lib/flix/types";
+import { qualityLabel } from "@/lib/flix/quality";
+import { formatDuration, isNew } from "@/lib/flix/format";
+import { useUiStore } from "@/store/ui";
+import { usePlayerStore } from "@/store/player";
+import { useStateStore } from "@/store/state";
+import { useRecoStore } from "@/store/reco";
+
+const HOVER_DELAY_MS = 500;
+const OVERLAY_SCALE = 1.4;
+
+function cardImage(item: CatalogEntry): string | null {
+  if (item.backdropHash) return item.backdropHash;
+  if (item.type === "movie" && item.thumbHash) return item.thumbHash;
+  return item.posterHash ?? null;
+}
+
+function CardBase({ item }: { item: CatalogEntry }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const hoverTimer = useRef<number | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  const openDetail = useUiStore((s) => s.openDetail);
+  const closeDetail = useUiStore((s) => s.closeDetail);
+  const notify = useUiStore((s) => s.notify);
+  const openPlayer = usePlayerStore((s) => s.open);
+  const inMyList = useStateStore((s) => s.isInMyList(item.type, item.id));
+  const toggleMyList = useStateStore((s) => s.toggleMyList);
+  const rating = useStateStore((s) => s.ratingFor(item.type, item.id));
+  const setRating = useStateStore((s) => s.setRating);
+  const setWatched = useStateStore((s) => s.setWatched);
+  // « Nouveau » only while the title is both recent AND still unseen — same
+  // "seen" semantics as rows.ts's buildSeenKeys (any watched progress row on
+  // the title). The overlay's check button instead reflects FULLY watched
+  // (every indexed episode for a show), since that's what it toggles.
+  const seen = useStateStore((s) => s.progress.some((p) => p.topType === item.type && p.topId === item.id && p.watched));
+  const watched = useStateStore((s) => s.isWatched(item.type, item.id, item.type === "show" ? item.episodeCount : undefined));
+  const match = useRecoStore((s) => s.matchFor(item.type, item.id));
+  const showNewBadge = isNew(item.addedAt) && !seen;
+
+  const clearTimer = () => {
+    if (hoverTimer.current !== null) {
+      window.clearTimeout(hoverTimer.current);
+      hoverTimer.current = null;
+    }
+  };
+
+  const onEnter = () => {
+    clearTimer();
+    hoverTimer.current = window.setTimeout(() => {
+      const box = ref.current?.getBoundingClientRect();
+      if (box) setRect({ top: box.top, left: box.left, width: box.width });
+      setExpanded(true);
+    }, HOVER_DELAY_MS);
+  };
+  const onLeave = () => {
+    clearTimer();
+    setExpanded(false);
+  };
+
+  // The tile itself opens the detail sheet — mouse click, tap, or
+  // Enter/Espace once the tile is focused. Keydowns bubbling up from the
+  // portal overlay's own buttons are ignored (target !== currentTarget).
+  const activate = () => {
+    clearTimer();
+    setExpanded(false);
+    openDetail({ type: item.type, id: item.id });
+  };
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      activate();
+    }
+  };
+
+  useEffect(() => clearTimer, []);
+
+  // The expanded overlay is position:fixed via a portal, so any scroll —
+  // window or a row rail (hence capture) — would leave it stranded at its old
+  // coordinates. Close it instead, like Netflix does.
+  useEffect(() => {
+    if (!expanded) return;
+    const onScroll = () => setExpanded(false);
+    window.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => window.removeEventListener("scroll", onScroll, { capture: true });
+  }, [expanded]);
+
+  const image = cardImage(item);
+  const imageUrl = image ? api.imageUrl(image, 480) : null;
+
+  return (
+    <div
+      ref={ref}
+      role="button"
+      tabIndex={0}
+      aria-label={`Plus d’infos sur ${item.title}`}
+      onClick={activate}
+      onKeyDown={onKeyDown}
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
+      className="relative w-full cursor-pointer transition duration-200 ease-out-quart hover:-translate-y-1 hover:shadow-lift hover:ring-white/15"
+    >
+      <div className="relative aspect-video overflow-hidden rounded-card bg-surface ring-1 ring-white/5">
+        {imageUrl ? (
+          <Image src={imageUrl} alt={item.title} fill sizes="(max-width: 768px) 45vw, 20vw" className="object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-surface-hover to-surface p-2 text-center text-sm font-semibold text-muted">
+            {item.title}
+          </div>
+        )}
+        {showNewBadge && <span className="absolute left-1 top-1 rounded-full bg-accent px-1.5 py-px text-[10px] font-bold text-white">Nouveau</span>}
+      </div>
+
+      {expanded &&
+        rect &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <CardOverlay
+            item={item}
+            rect={rect}
+            onMouseEnter={clearTimer}
+            onMouseLeave={onLeave}
+            inMyList={inMyList}
+            rating={rating}
+            watched={watched}
+            match={match}
+            onPlay={() => {
+              setExpanded(false);
+              // A play started from "Plus comme ça" inside the detail modal
+              // should also dismiss the modal under the player (no-op otherwise).
+              closeDetail();
+              openPlayer({ kind: item.type, id: item.id, title: item.title });
+            }}
+            onToggleList={() => {
+              void toggleMyList(item.type, item.id);
+              notify(inMyList ? "Retiré de Ma liste" : "Ajouté à Ma liste");
+            }}
+            onRate={(value) => void setRating(item.type, item.id, value)}
+            onToggleWatched={() => {
+              void setWatched(item.type, item.id, !watched);
+              notify(watched ? "Marqué comme non vu" : "Marqué comme vu");
+            }}
+            onOpenDetail={() => openDetail({ type: item.type, id: item.id })}
+          />,
+          document.body,
+        )}
+    </div>
+  );
+}
+
+interface CardOverlayProps {
+  item: CatalogEntry;
+  rect: { top: number; left: number; width: number };
+  inMyList: boolean;
+  rating: number;
+  watched: boolean;
+  match: number | null;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+  onPlay: () => void;
+  onToggleList: () => void;
+  onRate: (value: number) => void;
+  onToggleWatched: () => void;
+  onOpenDetail: () => void;
+}
+
+function CardOverlay({ item, rect, inMyList, rating, watched, match, onMouseEnter, onMouseLeave, onPlay, onToggleList, onRate, onToggleWatched, onOpenDetail }: CardOverlayProps) {
+  const width = rect.width * OVERLAY_SCALE;
+  const maxLeft = typeof window !== "undefined" ? window.innerWidth - width - 8 : rect.left;
+  const left = Math.min(Math.max(8, rect.left - (width - rect.width) / 2), Math.max(8, maxLeft));
+  const heightDelta = (rect.width * (9 / 16) * OVERLAY_SCALE - rect.width * (9 / 16)) / 2;
+  const top = rect.top - heightDelta;
+
+  const image = cardImage(item);
+  const imageUrl = image ? api.imageUrl(image, 480) : null;
+  const label = qualityLabel(item.quality.height);
+
+  return (
+    <div
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      // React portal events bubble through the *component* tree: without this,
+      // clicking any overlay button would also trigger the card's own
+      // openDetail click handler.
+      onClick={(e) => e.stopPropagation()}
+      style={{ position: "fixed", top, left, width, zIndex: 60 }}
+      className="overflow-hidden rounded-panel bg-surface shadow-pop ring-1 ring-white/10 animate-scale-in"
+    >
+      <div className="relative aspect-video w-full">
+        {imageUrl ? (
+          <Image src={imageUrl} alt={item.title} fill sizes="30vw" className="object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-surface-hover text-sm font-semibold text-muted">{item.title}</div>
+        )}
+      </div>
+      <div className="space-y-2 p-3">
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={onPlay} aria-label="Lecture" className="grid size-8 place-items-center rounded-full bg-white text-black transition-colors hover:bg-white/80">
+            <Play className="size-4 fill-black" />
+          </button>
+          <button
+            type="button"
+            onClick={onToggleList}
+            aria-label={inMyList ? "Retirer de ma liste" : "Ajouter à ma liste"}
+            className="grid size-8 place-items-center rounded-full border border-white/25 bg-white/5 backdrop-blur-sm text-white transition-colors hover:bg-white/15 hover:border-white/60"
+          >
+            {inMyList ? <Check className="size-4" /> : <Plus className="size-4" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => onRate(1)}
+            aria-label="J’aime"
+            className={"grid size-8 place-items-center rounded-full border text-white backdrop-blur-sm transition-colors " + (rating >= 1 ? "border-white bg-white/10" : "border-white/25 bg-white/5 hover:bg-white/15 hover:border-white/60")}
+          >
+            <ThumbsUp className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onRate(-1)}
+            aria-label="Je n’aime pas"
+            className={"grid size-8 place-items-center rounded-full border text-white backdrop-blur-sm transition-colors " + (rating === -1 ? "border-white bg-white/10" : "border-white/25 bg-white/5 hover:bg-white/15 hover:border-white/60")}
+          >
+            <ThumbsDown className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={onToggleWatched}
+            aria-label={watched ? "Marquer comme non vu" : "Marquer comme vu"}
+            title={watched ? "Marquer comme non vu" : "Marquer comme vu"}
+            className={
+              "grid size-8 place-items-center rounded-full border backdrop-blur-sm transition-colors " +
+              (watched ? "border-white bg-white/10 text-green-500" : "border-white/25 bg-white/5 text-white hover:bg-white/15 hover:border-white/60")
+            }
+          >
+            <Check className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={onOpenDetail}
+            aria-label="Plus d’infos"
+            className="ml-auto grid size-8 place-items-center rounded-full border border-white/25 bg-white/5 backdrop-blur-sm text-white transition-colors hover:bg-white/15 hover:border-white/60"
+          >
+            <ChevronDown className="size-4" />
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-muted">
+          {match !== null && <span className="font-bold text-green-500">{match}% de correspondance</span>}
+          {item.year && <span>{item.year}</span>}
+          {item.type === "movie" ? <span>{formatDuration(item.duration)}</span> : <span>{item.seasonCount} saison{item.seasonCount > 1 ? "s" : ""}</span>}
+          {label && <span className="rounded-full border border-white/30 px-1.5 text-[10px]">{label}</span>}
+          {item.quality.hdr && <span className="rounded-full border border-white/30 px-1.5 text-[10px]">HDR</span>}
+        </div>
+        <p className="line-clamp-1 text-sm font-semibold text-white">{item.title}</p>
+      </div>
+    </div>
+  );
+}
+
+// Memoised: HomeView re-renders on every progress/myList mutation (mark
+// watched, add to list, rating), and without this every catalogue card in
+// every row would re-run its five store selectors on each such action. `item`
+// references are stable across those mutations (memoised on [movies, shows]),
+// so memo skips the parent-driven re-render; a card whose OWN derived state
+// changed still updates through its individual store subscriptions.
+export const Card = memo(CardBase);

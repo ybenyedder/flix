@@ -1,0 +1,154 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*' # e.g. v0.1.0
+  workflow_dispatch:
+
+jobs:
+  desktop:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    permissions:
+      contents: write # lets electron-builder publish to the Releases page
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      # These installers are privileged, signed, published artifacts, so they
+      # MUST be built from the pinned lockfile — never an unpinned `npm install`
+      # (supply-chain integrity). We used to `rm` the lockfile to work around a
+      # Linux-generated lock omitting the win32 native optionals (lightningcss,
+      # @next/swc, @tailwindcss/oxide…), which broke Windows with "Cannot find
+      # module lightningcss.win32-x64-msvc.node". That's no longer needed: npm's
+      # cross-platform lockfile records every platform's optional binaries and
+      # `npm ci` installs the ones matching this runner. Keep the lockfile;
+      # --include=optional just makes the intent explicit.
+      - name: Install dependencies
+        run: npm ci --include=optional
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Prepare desktop bundle
+        run: npm run desktop:prepare
+
+      - name: Build and publish Electron app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --publish always
+
+  # Build the standalone server bundle (the thing Docker/Pterodactyl deploys)
+  # and attach it to the same release. Node 22 here is deliberate: the bundled
+  # better-sqlite3 binding is ABI-locked to the build Node, and both the
+  # Dockerfile runtime and the Pterodactyl egg's yolk run Node 22 — keep all
+  # three in sync.
+  server-bundle:
+    runs-on: ubuntu-latest
+    needs: desktop
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      - name: Build web app
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+      - name: Package standalone bundle
+        run: node scripts/prepare-standalone.mjs --tar flix-standalone-linux-x64.tar.gz
+      - name: Attach bundle to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${GITHUB_REF_NAME}" flix-standalone-linux-x64.tar.gz --clobber
+
+  # Build and push the container image to GHCR (ghcr.io/<owner>/flix).
+  # Independent of the release assets — the compose file and generic Docker
+  # users pull this directly.
+  docker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Build the Android + Android TV APKs and attach them to the same release.
+  # Runs after the desktop job has created/published the release (gh release
+  # upload only ADDS assets — it never touches the release notes
+  # electron-builder wrote).
+  android:
+    runs-on: ubuntu-latest
+    needs: desktop
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: android-native
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - name: Build release APKs
+        env:
+          FLIX_VERSION: ${{ github.ref_name }}
+        run: ./gradlew :app:assembleRelease :tv:assembleRelease
+      - name: Attach APKs to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk "../Flix-${GITHUB_REF_NAME}-mobile.apk"
+          cp tv/build/outputs/apk/release/tv-release.apk "../Flix-${GITHUB_REF_NAME}-tv.apk"
+          cd ..
+          gh release upload "${GITHUB_REF_NAME}" "Flix-${GITHUB_REF_NAME}-mobile.apk" "Flix-${GITHUB_REF_NAME}-tv.apk" --clobber

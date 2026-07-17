@@ -1,0 +1,215 @@
+"use client";
+
+// Home: billboard + rows, personalised by the Phase 7 taste engine
+// (src/server/reco/engine.ts via /api/recommend, store/reco.ts). Falls back to
+// the original Phase 5 heuristics (recency, catalogue-wide genre frequency)
+// whenever the engine has nothing yet to say for a row — a fresh profile with
+// zero watch history should still see a populated, if impersonal, Home.
+
+import { useMemo } from "react";
+import { DownloadCloud } from "lucide-react";
+import { useCatalog } from "@/lib/flix/useCatalog";
+import { useLibraryStore } from "@/store/library";
+import { useStateStore } from "@/store/state";
+import { useRecoStore } from "@/store/reco";
+import { useProfileStore } from "@/store/profile";
+import { useArrStore } from "@/store/arr";
+import { useUiStore } from "@/store/ui";
+import { sortByAddedDesc, buildGenreRows, type CatalogItem } from "@/lib/flix/rows";
+import type { RecoRow } from "@/lib/flix/types";
+import { BillboardHero } from "./BillboardHero";
+import { Row } from "./Row";
+import { Card } from "./Card";
+import { Top10Card } from "./Top10Card";
+import { ContinueWatchingCard } from "./ContinueWatchingCard";
+import { SkeletonHero, SkeletonRow } from "./Skeletons";
+
+const GENRE_ROWS = 3;
+const GENRE_ROW_SIZE = 20;
+const RECENT_ROW_SIZE = 20;
+
+function keyOf(item: CatalogItem): string {
+  return `${item.type}-${item.id}`;
+}
+
+// One-time admin nudge to discover the opt-in *arr integration. Shown only to an
+// admin who hasn't enabled or dismissed it — hidden entirely otherwise.
+function ArrPromoBanner() {
+  const isAdmin = useProfileStore((s) => s.isAdmin);
+  const enabled = useArrStore((s) => s.enabled);
+  const dismissed = useArrStore((s) => s.dismissed);
+  const loaded = useArrStore((s) => s.loaded);
+  const dismissBanner = useArrStore((s) => s.dismissBanner);
+  const navigate = useUiStore((s) => s.navigate);
+
+  if (!loaded || !isAdmin || enabled || dismissed) return null;
+
+  return (
+    <div className="px-4 pt-20 md:px-12">
+      <div className="flex flex-col gap-3 rounded-panel border border-accent/30 bg-surface p-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-start gap-3">
+          <DownloadCloud className="mt-0.5 size-6 shrink-0 text-accent" />
+          <div>
+            <p className="text-sm font-semibold text-white">Nouveau : demandez films et séries depuis Flix</p>
+            <p className="text-xs text-muted">
+              Connectez Sonarr, Radarr, Prowlarr et Bazarr pour télécharger et sous-titrer automatiquement les titres absents de votre bibliothèque.
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button type="button" onClick={() => navigate("settings")} className="rounded-field bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover">
+            Configurer
+          </button>
+          <button type="button" onClick={() => void dismissBanner()} className="rounded-field px-3 py-1.5 text-xs text-muted hover:text-white">
+            Ignorer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function HomeView() {
+  const { movies, shows } = useCatalog();
+  const status = useLibraryStore((s) => s.status);
+  const progress = useStateStore((s) => s.progress);
+  const myList = useStateStore((s) => s.myList);
+  const recoRows = useRecoStore((s) => s.rows);
+  const billboardRef = useRecoStore((s) => s.billboard);
+
+  const all = useMemo<CatalogItem[]>(() => [...movies, ...shows], [movies, shows]);
+  const catalogByKey = useMemo(() => {
+    const map = new Map<string, CatalogItem>();
+    for (const item of all) map.set(`${item.type}:${item.id}`, item);
+    return map;
+  }, [all]);
+
+  // Every engine row resolved to catalogue items exactly once per data change
+  // (rowId -> items). Reading from the Map at render time hands back stable
+  // array references instead of rebuilding them twice per row per render.
+  const rowItems = useMemo(() => {
+    const map = new Map<string, CatalogItem[]>();
+    for (const row of recoRows) {
+      map.set(
+        row.id,
+        row.items.map((ref) => catalogByKey.get(`${ref.type}:${ref.id}`)).filter((item): item is CatalogItem => item !== undefined),
+      );
+    }
+    return map;
+  }, [recoRows, catalogByKey]);
+  const itemsFor = (row: RecoRow): CatalogItem[] => rowItems.get(row.id) ?? [];
+
+  // Most recently added stands in for "featured" only when the engine has no
+  // personalised pick yet (brand-new profile, empty library) — see
+  // pickBillboard()'s own cold-start fallback, mirrored here in case the
+  // referenced item somehow isn't in this profile's (kids-filtered) catalogue.
+  const recentFallbackBillboard = useMemo(() => sortByAddedDesc(all)[0] ?? null, [all]);
+  const billboard = (billboardRef && catalogByKey.get(`${billboardRef.type}:${billboardRef.id}`)) || recentFallbackBillboard;
+
+  const recentlyAdded = useMemo(() => sortByAddedDesc(all).slice(0, RECENT_ROW_SIZE), [all]);
+
+  const top10MoviesRow = recoRows.find((r) => r.id === "top10-movies");
+  const top10ShowsRow = recoRows.find((r) => r.id === "top10-shows");
+  const forYouRow = recoRows.find((r) => r.id === "for-you");
+  const becauseRows = recoRows.filter((r) => r.id.startsWith("because-"));
+  const engineGenreRows = recoRows.filter((r) => r.id.startsWith("genre-"));
+  const discoverRow = recoRows.find((r) => r.id === "discover");
+
+  // Cold-start fallbacks: newest-added Top 10 and catalogue-wide genre
+  // frequency, exactly the Phase 5 heuristics, used only when the engine
+  // hasn't accumulated enough signal to produce its own version of that row.
+  const fallbackTop10Movies = useMemo(() => (top10MoviesRow ? [] : sortByAddedDesc(movies).slice(0, 10)), [top10MoviesRow, movies]);
+  const fallbackTop10Shows = useMemo(() => (top10ShowsRow ? [] : sortByAddedDesc(shows).slice(0, 10)), [top10ShowsRow, shows]);
+  const fallbackGenreRows = useMemo(
+    () => (engineGenreRows.length ? [] : buildGenreRows(all, GENRE_ROWS, GENRE_ROW_SIZE)),
+    [engineGenreRows.length, all],
+  );
+
+  const myListItems = useMemo<CatalogItem[]>(() => {
+    const wanted = new Set(myList.map((e) => `${e.itemType}-${e.itemId}`));
+    return all.filter((item) => wanted.has(keyOf(item)));
+  }, [all, myList]);
+
+  const continueWatching = useMemo(
+    () => progress.filter((p) => p.duration > 0 && p.position > 5 && p.position / p.duration < 0.92),
+    [progress],
+  );
+
+  if (status === "loading" || status === "idle") {
+    return (
+      <div>
+        <SkeletonHero />
+        <SkeletonRow />
+        <SkeletonRow />
+      </div>
+    );
+  }
+
+  if (status === "ready" && all.length === 0) {
+    return (
+      <div>
+        <ArrPromoBanner />
+        <div className="flex min-h-screen flex-col items-center justify-center gap-2 px-6 text-center">
+          <p className="text-lg font-semibold text-white">Bibliothèque vide</p>
+          <p className="text-sm text-muted">Ajoutez des films ou des séries dans le dossier vidéo configuré, puis relancez une analyse.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pb-20">
+      <ArrPromoBanner />
+      {billboard ? <BillboardHero item={billboard} /> : <div className="h-24" />}
+      <div className="relative z-10 -mt-16 space-y-8 stagger-children md:-mt-24">
+        {continueWatching.length > 0 && (
+          <Row title="Continuer à regarder" items={continueWatching} keyFor={(e) => `${e.itemType}-${e.itemId}`} renderItem={(entry) => <ContinueWatchingCard entry={entry} />} />
+        )}
+        {myListItems.length > 0 && <Row title="Ma liste" items={myListItems} keyFor={keyOf} renderItem={(item) => <Card item={item} />} />}
+
+        {(top10MoviesRow ? itemsFor(top10MoviesRow) : fallbackTop10Movies).length > 0 && (
+          <Row
+            title="Top 10 des films"
+            items={top10MoviesRow ? itemsFor(top10MoviesRow) : fallbackTop10Movies}
+            keyFor={keyOf}
+            itemClassName="w-[50vw] sm:w-[32vw] md:w-[22vw] lg:w-[17vw]"
+            renderItem={(item, index) => <Top10Card item={item} rank={index + 1} />}
+          />
+        )}
+        {(top10ShowsRow ? itemsFor(top10ShowsRow) : fallbackTop10Shows).length > 0 && (
+          <Row
+            title="Top 10 des séries"
+            items={top10ShowsRow ? itemsFor(top10ShowsRow) : fallbackTop10Shows}
+            keyFor={keyOf}
+            itemClassName="w-[50vw] sm:w-[32vw] md:w-[22vw] lg:w-[17vw]"
+            renderItem={(item, index) => <Top10Card item={item} rank={index + 1} />}
+          />
+        )}
+
+        {forYouRow && itemsFor(forYouRow).length > 0 && (
+          <Row title={forYouRow.title} items={itemsFor(forYouRow)} keyFor={keyOf} renderItem={(item) => <Card item={item} />} />
+        )}
+
+        {becauseRows.map((row) => {
+          const items = itemsFor(row);
+          return items.length > 0 && <Row key={row.id} title={row.title} items={items} keyFor={keyOf} renderItem={(item) => <Card item={item} />} />;
+        })}
+
+        {engineGenreRows.map((row) => {
+          const items = itemsFor(row);
+          return items.length > 0 && <Row key={row.id} title={row.title} items={items} keyFor={keyOf} renderItem={(item) => <Card item={item} />} />;
+        })}
+        {fallbackGenreRows.map(
+          (row) =>
+            row.items.length > 0 && <Row key={row.genre} title={row.genre} items={row.items} keyFor={keyOf} renderItem={(item) => <Card item={item} />} />,
+        )}
+
+        {recentlyAdded.length > 0 && <Row title="Ajoutés récemment" items={recentlyAdded} keyFor={keyOf} renderItem={(item) => <Card item={item} />} />}
+
+        {discoverRow && itemsFor(discoverRow).length > 0 && (
+          <Row title={discoverRow.title} items={itemsFor(discoverRow)} keyFor={keyOf} renderItem={(item) => <Card item={item} />} />
+        )}
+      </div>
+    </div>
+  );
+}

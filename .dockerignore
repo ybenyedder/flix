@@ -1,0 +1,25 @@
+# Keep the build context lean — the image builds from sources only.
+.git
+.github
+.next
+node_modules
+dist-desktop
+dist-standalone
+android-native
+build
+desktop
+test
+docs
+*.md
+*.log
+# macOS AppleDouble / one-off scratch dotfiles (e.g. ._q.mjs) — keep them out
+# of the build context so they can't leak into an image.
+._*
+tsconfig.tsbuildinfo
+Dockerfile
+docker-compose.yml
+.dockerignore
+# Never ship media or local data into an image by accident.
+videos
+media
+data

@@ -1,0 +1,69 @@
+# Flix — VPN overlay (Mullvad via gluetun) for the *arr download stack.
+#
+# Routes ONLY qBittorrent's traffic through Mullvad WireGuard, with gluetun's
+# built-in kill-switch: if the tunnel drops, qBittorrent loses all connectivity
+# (no IP leak). The rest of the stack (Flix, Sonarr/Radarr/Prowlarr/Bazarr) is
+# untouched.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.arr.yml -f docker-compose.vpn.yml up -d
+#   (rootless podman: add -f docker-compose.podman.yml)
+#
+# The WireGuard config in ./vpn/gluetun.env is written by Flix itself
+# (Paramètres → VPN Mullvad: paste your account number). Until it exists, gluetun
+# comes up with no tunnel and the kill-switch keeps qBittorrent offline — safe by
+# default. See docs/downloads-arr.md.
+
+services:
+  # Flix shares the vpn config dir so its Settings page can write gluetun.env.
+  flix:
+    volumes:
+      - ./vpn:/vpn
+
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: flix-gluetun
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      VPN_SERVICE_PROVIDER: custom
+      VPN_TYPE: wireguard
+      # Kill-switch stays on (gluetun default). Allow the compose subnet so the
+      # *arr can reach qBittorrent's WebUI and the tunnel can talk to the LAN.
+      FIREWALL_OUTBOUND_SUBNETS: 172.31.247.0/24
+      # 8080 = qBittorrent WebUI (reachable from the *arr); 8000 = gluetun control
+      # server, which Flix queries to show live VPN status (exit IP).
+      FIREWALL_INPUT_PORTS: "8080,8000"
+      TZ: ${TZ:-Europe/Paris}
+    # WireGuard secrets/endpoint written by Flix; optional so the stack still
+    # boots (kill-switch active, qBittorrent offline) before it's configured.
+    env_file:
+      - path: ./vpn/gluetun.env
+        required: false
+    volumes:
+      # Control-server auth: expose only the read-only public-IP route so Flix
+      # can show live VPN status (see the file's comment).
+      - ./deploy/arr/gluetun-auth.toml:/gluetun/auth/config.toml:ro
+    ports:
+      # qBittorrent's ports move here — it now shares gluetun's network namespace.
+      - "127.0.0.1:${QBIT_WEBUI_PORT:-8080}:8080"
+      - "6881:6881"
+      - "6881:6881/udp"
+    networks:
+      default:
+        aliases:
+          # So Sonarr/Radarr's download client host "qbittorrent:8080" keeps
+          # resolving (qBittorrent has no network of its own once tunneled).
+          - qbittorrent
+
+  qbittorrent:
+    # All traffic through the tunnel; kill-switch is gluetun's firewall.
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_started
+    # Ports are owned by gluetun now — a service using another's netns can't
+    # publish its own.
+    ports: !reset []

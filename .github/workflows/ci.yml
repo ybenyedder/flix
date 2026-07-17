@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 22 to match everything deployment-facing (Dockerfile, release
+      # server bundle, Pterodactyl egg yolk) — better-sqlite3's binding is
+      # ABI-locked to the build Node.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # The playback/image test suites spawn a REAL ffmpeg/ffprobe (to generate
+      # a tiny H.264/AAC clip and exercise actual probing/remux/transcode) —
+      # ubuntu-latest's preinstalled ffmpeg build isn't guaranteed to have the
+      # codecs this needs, so install a known-good one explicitly rather than
+      # relying on the runner image's default.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      # better-sqlite3 compiles a native binding during install.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+  # NOTE: release artifacts (desktop installers + the Android/Android TV
+  # APKs) are built and attached to the GitHub Release by release.yml, which
+  # triggers on `v*` tags. This workflow only runs on branch/PR pushes.

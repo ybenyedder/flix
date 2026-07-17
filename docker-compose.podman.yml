@@ -1,0 +1,37 @@
+# Rootless-podman overlay for the *arr download stack.
+#
+# Under ROOTLESS podman, the host user (uid 1000) maps to container ROOT — not to
+# container uid 1000. So the linuxserver images' default PUID=1000 ('abc') and
+# Flix's own 'node' user cannot write the host-owned bind mounts (./media) or
+# named volumes (flix-data, *-config): every write lands as an unprivileged
+# sub-uid that doesn't own them. Running each service as container-root (which IS
+# the host user in rootless) makes every path writable. Harmless and unnecessary
+# under rootful Docker — use this overlay only with rootless podman:
+#
+#   podman compose -f docker-compose.yml -f docker-compose.arr.yml -f docker-compose.podman.yml up -d
+#
+# (Add -f only for podman. Rootful Docker users skip this file entirely.)
+
+services:
+  flix:
+    user: "0:0"
+  qbittorrent:
+    environment:
+      PUID: "0"
+      PGID: "0"
+  prowlarr:
+    environment:
+      PUID: "0"
+      PGID: "0"
+  sonarr:
+    environment:
+      PUID: "0"
+      PGID: "0"
+  radarr:
+    environment:
+      PUID: "0"
+      PGID: "0"
+  bazarr:
+    environment:
+      PUID: "0"
+      PGID: "0"

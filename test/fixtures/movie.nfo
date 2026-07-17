@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<movie>
+  <title>Inception</title>
+  <originaltitle>Inception</originaltitle>
+  <year>2010</year>
+  <plot>A thief who steals corporate secrets through dream-sharing technology is given the inverse task of planting an idea into the mind of a C.E.O.</plot>
+  <outline>A short outline.</outline>
+  <tagline>Your mind is the scene of the crime.</tagline>
+  <runtime>148</runtime>
+  <mpaa>PG-13</mpaa>
+  <premiered>2010-07-16</premiered>
+  <studio>Warner Bros. Pictures</studio>
+  <genre>Action</genre>
+  <genre>Science Fiction</genre>
+  <genre>Thriller</genre>
+  <director>Christopher Nolan</director>
+  <actor>
+    <name>Leonardo DiCaprio</name>
+    <role>Cobb</role>
+    <thumb>https://example.com/should-never-be-fetched.jpg</thumb>
+  </actor>
+  <actor>
+    <name>Joseph Gordon-Levitt</name>
+    <role>Arthur</role>
+  </actor>
+  <uniqueid type="imdb" default="true">tt1375666</uniqueid>
+  <thumb aspect="poster">https://example.com/poster.jpg</thumb>
+  <fanart>
+    <thumb>https://example.com/fanart.jpg</thumb>
+  </fanart>
+</movie>

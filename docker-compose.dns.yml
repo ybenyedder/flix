@@ -1,0 +1,34 @@
+# Optional overlay: pin a public DNS fallback for the stack's containers.
+#
+# On a host whose /etc/resolv.conf is unreliable — typically a host running a
+# desktop VPN (Mullvad, etc.) that rewrites the resolvers, or one advertising
+# IPv6 link-local nameservers — podman's aardvark can fail to forward external
+# lookups, and containers lose DNS (routing still works). This keeps aardvark
+# (the fixed network gateway .1) for container-name resolution and adds a public
+# resolver as fallback for external names.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.arr.yml -f docker-compose.dns.yml up -d
+#
+# Only needed on such hosts; a normal host resolves fine without it.
+
+x-dns: &dns
+  dns:
+    - 172.31.247.1 # aardvark (this stack's fixed network gateway) — container names
+    - 1.1.1.1 # public fallback — external names
+    - 1.0.0.1
+
+services:
+  flix:
+    <<: *dns
+  prowlarr:
+    <<: *dns
+  sonarr:
+    <<: *dns
+  radarr:
+    <<: *dns
+  bazarr:
+    <<: *dns
+  flaresolverr:
+    <<: *dns
+  arr-init:
+    <<: *dns

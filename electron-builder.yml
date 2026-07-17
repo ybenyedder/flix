@@ -1,0 +1,85 @@
+appId: local.flix.desktop
+productName: Flix
+copyright: Flix
+
+directories:
+  output: dist-desktop
+  buildResources: build
+
+# CI publish target — used ONLY by `electron-builder --publish` in
+# .github/workflows/release.yml to upload built installers to a GitHub
+# Release. This is a build-time/CI concern, not a runtime one: the app itself
+# ships no electron-updater dependency and no update-check code (see
+# desktop/main.js) and never talks to this or any other host once installed.
+publish:
+  provider: github
+  owner: ybenyedder
+  repo: flix
+  releaseType: release
+
+# Only the thin Electron shell goes inside the asar; the Next standalone server
+# (with its native better-sqlite3 binding) ships unpacked as a resource so it can
+# be spawned as a child process. No auto-updater, no runtime network dependency
+# of any kind at app runtime — Flix is 100% offline by design.
+files:
+  - desktop/**/*
+  - package.json
+
+extraResources:
+  - from: .next/standalone
+    to: app/server
+    filter:
+      - "**/*"
+
+asar: true
+
+# The bundled server's native modules are rebuilt for Electron by `desktop:prepare`
+# (against the standalone copy). Disable electron-builder's own rebuild so it does
+# not overwrite that binary with a Node-ABI prebuild.
+npmRebuild: false
+
+linux:
+  target:
+    - deb
+    - AppImage
+  category: Video
+  synopsis: Self-hosted local video library and player
+  description: Flix is a self-hosted, local-first Netflix-style video library and player — direct play/remux/transcode, real metadata, cover art and local recommendations, with zero telemetry and zero network access.
+  maintainer: Flix <maintainers@flix.local>
+  # A directory of per-size PNGs so the .deb installs every hicolor size
+  # (16→512), generated locally by scripts/gen-icons.mjs. With only a single
+  # build/icon.png, electron-builder installs ONLY 512x512 and many
+  # panels/menus won't downscale it — the app then shows a generic icon (the
+  # AppImage is unaffected because it embeds its own icon).
+  icon: build/icons
+  # electron-builder writes these keys verbatim into [Desktop Entry] (must be a
+  # FLAT map — a nested `entry:` here is emitted literally as `entry=[object
+  # Object]` and ignored). Note `Categories` is NOT settable here: app-builder-lib
+  # always derives it from `category` above and overwrites whatever is set on
+  # this map (verified against node_modules/app-builder-lib's LinuxTargetHelper).
+  desktop:
+    Name: Flix
+
+deb:
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libasound2
+
+win:
+  target:
+    - nsis
+    - portable
+  # A single high-resolution square PNG (generated locally by
+  # scripts/gen-icons.mjs); electron-builder's bundled, already-vendored
+  # app-builder tool converts it to .ico locally — no network fetch.
+  icon: build/icon.png
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${productName}-Setup-${version}.${ext}

@@ -1,0 +1,39 @@
+# Flix — self-hosted deployment.
+#
+#   1. Point the /media volume at your video library (read-only is enough).
+#   2. docker compose up -d
+#   3. Open http://<host>:4247 — the first boot prints a temporary admin
+#      password in the logs (`docker compose logs flix`) unless you set
+#      FLIX_ADMIN_PASSWORD below.
+#
+# Téléchargements automatiques (opt-in) : pour déployer aussi Sonarr/Radarr/
+# Prowlarr/Bazarr + qBittorrent et les câbler automatiquement, superposez le
+# fichier docker-compose.arr.yml (voir docs/downloads-arr.md) :
+#   docker compose -f docker-compose.yml -f docker-compose.arr.yml up -d
+
+services:
+  flix:
+    image: ghcr.io/ybenyedder/flix:latest
+    build: .
+    container_name: flix
+    restart: unless-stopped
+    ports:
+      - "4247:4247"
+    volumes:
+      - flix-data:/data
+      # Change the left side to your library path:
+      - ./videos:/media:ro
+    environment:
+      # Bind all interfaces. Without this, start.mjs falls back to the container's
+      # HOSTNAME (the container id → its eth0 IP only), so the image's HEALTHCHECK
+      # (which probes 127.0.0.1) can never reach the server and the container is
+      # reported "unhealthy" even though it serves fine over the published port.
+      FLIX_HOST: "0.0.0.0"
+      # FLIX_ADMIN_PASSWORD: "change-me"   # skip the generated first-boot password
+      # FLIX_MAX_TRANSCODES: "2"           # concurrent ffmpeg sessions cap
+      # FLIX_MAX_TRANSCODE_HEIGHT: "1080"  # software-transcode resolution guard
+      # FLIX_TRICKPLAY: "1"                # scrubbing preview sprites (extra CPU per file)
+      FLIX_LOG_FORMAT: pretty
+
+volumes:
+  flix-data:

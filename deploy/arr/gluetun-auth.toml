@@ -1,0 +1,8 @@
+# gluetun control-server auth (v3.40+ requires it). Expose ONLY the read-only
+# public-IP route without auth so Flix can display live VPN status; every other
+# control route stays locked. The endpoint is reachable only inside the compose
+# network (gluetun's firewall opens 8000 to that subnet only).
+[[roles]]
+name = "flix-status"
+routes = ["GET /v1/publicip/ip"]
+auth = "none"

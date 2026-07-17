@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Flix connects ONLY to the user-configured Flix server (see Onboarding + the
+  OkHttp client in FlixApi.kt), which on a typical home setup is plain http with
+  no TLS — so cleartext CANNOT be fully disabled. Rather than leave that to the
+  blanket android:usesCleartextTraffic flag, this config makes the posture an
+  explicit, reviewable declaration: cleartext stays permitted (the LAN-http
+  requirement), while an https:// base the user types still works unchanged (the
+  scheme is honoured verbatim by FlixApi.normalizeBase). Lives in :app (a
+  leaf-app resource), not :core.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

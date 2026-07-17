@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Shared manifest fragment: the manifest merger folds this into both :app and
+  :tv automatically because they declare a `implementation(project(":core"))`
+  dependency. Keeping permissions + the playback service declared exactly ONCE
+  here (instead of duplicated in both leaf manifests) is the whole point of
+  putting them in the library module.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Talks ONLY to the user-configured Flix server on the LAN — see
+         usesCleartextTraffic in the leaf manifests and the OkHttp client in
+         FlixApi.kt, which never targets any other host. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <application>
+        <!-- Native playback + lock-screen/notification media controls, shared
+             by the phone and TV UIs.
+             exported=false: the ONLY controller is the app's own PlayerHolder,
+             which binds by explicit ComponentName within the same UID (there is
+             no Android Auto / Wear / assistant / media-resumption integration
+             anywhere). Lock-screen + notification controls come from the
+             MediaStyle notification this service posts, which needs no exported
+             service — so nothing external legitimately connects, and keeping it
+             unexported stops any other app from grabbing the MediaSession. -->
+        <service
+            android:name="local.flix.core.playback.PlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

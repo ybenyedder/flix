@@ -1,0 +1,191 @@
+# Flix — opt-in "Téléchargements automatiques" overlay.
+#
+# Deploys the full request-to-library chain alongside Flix and wires it together
+# automatically. Use it AS AN OVERRIDE on top of the base compose file:
+#
+#   mkdir -p media/{movies,shows,downloads}
+#   docker compose -f docker-compose.yml -f docker-compose.arr.yml up -d
+#
+# Then, the one manual step: open Prowlarr (http://<host>:9696), finish its auth
+# setup and add at least one indexer — the Applications sync pushes it to
+# Sonarr/Radarr automatically. Full guide: docs/downloads-arr.md
+#
+# Security note: the qBittorrent WebUI is published on 127.0.0.1 only and skips
+# auth for the fixed compose subnet below (so Sonarr/Radarr connect without
+# credentials). Do not re-publish 8080 on a public interface.
+
+networks:
+  default:
+    ipam:
+      config:
+        # Fixed subnet so qBittorrent's auth whitelist (see arr-init.mjs seed) is
+        # stable across recreates.
+        - subnet: 172.31.247.0/24
+
+services:
+  # Overlay the base flix service: mark the opt-in decided (running this compose
+  # IS the opt-in — no TTY prompt needed) and expose the downloaded movies/shows
+  # read-only inside Flix's /media so the scanner picks them up.
+  flix:
+    environment:
+      FLIX_ARR_SETUP: "1"
+    volumes:
+      - ./media/movies:/media/movies:ro
+      - ./media/shows:/media/shows:ro
+
+  # One-shot: pre-seed qBittorrent.conf BEFORE qbittorrent's first start so the
+  # subnet-whitelist auth is in place from the very first boot (editing the conf
+  # while qbittorrent runs would be overwritten on its shutdown).
+  qbit-seed:
+    image: node:22-bookworm-slim
+    restart: "no"
+    volumes:
+      - qbit-config:/config
+      - ./deploy/arr:/app:ro
+    command: ["node", "/app/arr-init.mjs", "--seed-qbit"]
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: flix-qbittorrent
+    restart: unless-stopped
+    depends_on:
+      qbit-seed:
+        condition: service_completed_successfully
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-Europe/Paris}
+      UMASK: "002"
+      WEBUI_PORT: "8080"
+    ports:
+      # WebUI — localhost only (see security note above). Host port overridable
+      # with QBIT_WEBUI_PORT when 8080 is already taken on the host.
+      - "127.0.0.1:${QBIT_WEBUI_PORT:-8080}:8080"
+      - "6881:6881"
+      - "6881:6881/udp"
+    volumes:
+      - qbit-config:/config
+      - ./media:/data
+
+  # Cloudflare-challenge solver — lets Prowlarr reach indexers behind Cloudflare
+  # (1337x, eztv…). arr-init registers it as a Prowlarr proxy and tags those
+  # indexers to route through it. Headless-Chromium based, so it uses some RAM.
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flix-flaresolverr
+    restart: unless-stopped
+    environment:
+      LOG_LEVEL: info
+      TZ: ${TZ:-Europe/Paris}
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: flix-prowlarr
+    restart: unless-stopped
+    depends_on:
+      - flaresolverr
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-Europe/Paris}
+      UMASK: "002"
+    ports:
+      - "9696:9696"
+    volumes:
+      - prowlarr-config:/config
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: flix-sonarr
+    restart: unless-stopped
+    depends_on:
+      - qbittorrent
+      - prowlarr
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-Europe/Paris}
+      UMASK: "002"
+    ports:
+      - "8989:8989"
+    volumes:
+      - sonarr-config:/config
+      - ./media:/data
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: flix-radarr
+    restart: unless-stopped
+    depends_on:
+      - qbittorrent
+      - prowlarr
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-Europe/Paris}
+      UMASK: "002"
+    ports:
+      - "7878:7878"
+    volumes:
+      - radarr-config:/config
+      - ./media:/data
+
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: flix-bazarr
+    restart: unless-stopped
+    depends_on:
+      - sonarr
+      - radarr
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-Europe/Paris}
+      UMASK: "002"
+    ports:
+      - "6767:6767"
+    volumes:
+      - bazarr-config:/config
+      - ./media:/data
+
+  # One-shot auto-wiring: reads each service's API key from its config volume,
+  # configures root folders + qBittorrent download clients, registers Sonarr/
+  # Radarr as Prowlarr applications, best-effort wires Bazarr, then writes
+  # arr-services.json into Flix's data volume so Flix auto-detects everything.
+  arr-init:
+    image: node:22-bookworm-slim
+    container_name: flix-arr-init
+    restart: on-failure
+    environment:
+      # Indexeurs à activer : "everything" (TOUTES les définitions publiques
+      # connues de Prowlarr — défaut, couverture max), "public"/"anime"/"fr"/"ru"
+      # (paquets curatés, combinables : "public,anime"), "all" (tous les paquets),
+      # ou "a,b,c" (noms de définitions Prowlarr). Mettre "off" pour ne rien
+      # activer (étape manuelle dans Prowlarr).
+      FLIX_ARR_INDEXERS: ${FLIX_ARR_INDEXERS:-everything}
+      # Profil qualité par défaut : "max" (meilleure qualité, jusqu'au 4K/Remux —
+      # défaut), "balanced" (WEB/x264 1080p, plus rapide et mieux seedé), ou "off"
+      # (laisser le profil *arr par défaut). N'affecte que le profil « Any » vierge.
+      FLIX_ARR_QUALITY: ${FLIX_ARR_QUALITY:-}
+    depends_on:
+      - prowlarr
+      - sonarr
+      - radarr
+      - bazarr
+      - qbittorrent
+      - flaresolverr
+    volumes:
+      - ./deploy/arr:/app:ro
+      - flix-data:/flix-data
+      - prowlarr-config:/cfg/prowlarr:ro
+      - sonarr-config:/cfg/sonarr:ro
+      - radarr-config:/cfg/radarr:ro
+      - bazarr-config:/cfg/bazarr:ro
+    command: ["node", "/app/arr-init.mjs"]
+
+volumes:
+  qbit-config:
+  prowlarr-config:
+  sonarr-config:
+  radarr-config:
+  bazarr-config:
