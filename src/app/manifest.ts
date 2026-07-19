@@ -8,6 +8,9 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Flix — Ta vidéothèque personnelle",
     short_name: "Flix",
     description: "Flix est une plateforme vidéo self-hosted 100% locale : films, séries, recommandations, zéro télémétrie.",
+    // Stable install identity: without `id`, browsers key the installed app on
+    // start_url — changing it later would orphan existing installations.
+    id: "/",
     start_url: "/",
     scope: "/",
     display: "standalone",

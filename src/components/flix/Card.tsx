@@ -46,7 +46,7 @@ function CardBase({ item }: { item: CatalogEntry }) {
   // "seen" semantics as rows.ts's buildSeenKeys (any watched progress row on
   // the title). The overlay's check button instead reflects FULLY watched
   // (every indexed episode for a show), since that's what it toggles.
-  const seen = useStateStore((s) => s.progress.some((p) => p.topType === item.type && p.topId === item.id && p.watched));
+  const seen = useStateStore((s) => s.seenTopKeys.has(`${item.type}:${item.id}`));
   const watched = useStateStore((s) => s.isWatched(item.type, item.id, item.type === "show" ? item.episodeCount : undefined));
   const match = useRecoStore((s) => s.matchFor(item.type, item.id));
   const showNewBadge = isNew(item.addedAt) && !seen;

@@ -25,6 +25,16 @@ interface StateStore {
   myList: MyListEntry[];
   ratings: RatingEntry[];
   progress: ProgressEntry[];
+  // Derived lookup indices, rebuilt ONCE per snapshot change (see withDerived).
+  // Every mounted Card runs its selectors on every store set(); with arrays
+  // that was O(cards × rows) linear scans per mutation — thousands of them on
+  // a large grid. These make each selector O(1). Arrays stay the source of
+  // truth; the indices are never mutated in place.
+  myListKeys: Set<string>;
+  ratingByKey: Map<string, number>;
+  watchedKeys: Set<string>;
+  seenTopKeys: Set<string>;
+  watchedEpisodeCountByShow: Map<number, number>;
   load: () => Promise<void>;
   reset: () => void;
   isInMyList: (itemType: ItemType, itemId: number) => boolean;
@@ -40,6 +50,42 @@ interface StateStore {
 }
 
 const EMPTY: StateSnapshot = { myList: [], ratings: [], progress: [] };
+
+const keyOf = (itemType: string, itemId: number) => `${itemType}:${itemId}`;
+
+/** Augment a partial state update with the derived indices for whichever
+ *  source array it carries — the ONE place they are computed, so no set()
+ *  site can forget to keep them in sync. */
+function withDerived(partial: Partial<StateSnapshot> & { loaded?: boolean }) {
+  const out: Partial<StateStore> = { ...partial };
+  if (partial.myList) {
+    out.myListKeys = new Set(partial.myList.map((e) => keyOf(e.itemType, e.itemId)));
+  }
+  if (partial.ratings) {
+    out.ratingByKey = new Map(partial.ratings.map((e) => [keyOf(e.itemType, e.itemId), e.value]));
+  }
+  if (partial.progress) {
+    const watchedKeys = new Set<string>();
+    const seenTopKeys = new Set<string>();
+    const episodeSets = new Map<number, Set<number>>();
+    for (const p of partial.progress) {
+      if (!p.watched) continue;
+      watchedKeys.add(keyOf(p.itemType, p.itemId));
+      seenTopKeys.add(keyOf(p.topType, p.topId));
+      if (p.itemType === "episode" && p.topType === "show") {
+        let s = episodeSets.get(p.topId);
+        if (!s) episodeSets.set(p.topId, (s = new Set()));
+        s.add(p.itemId);
+      }
+    }
+    const watchedEpisodeCountByShow = new Map<number, number>();
+    for (const [showId, s] of episodeSets) watchedEpisodeCountByShow.set(showId, s.size);
+    out.watchedKeys = watchedKeys;
+    out.seenTopKeys = seenTopKeys;
+    out.watchedEpisodeCountByShow = watchedEpisodeCountByShow;
+  }
+  return out;
+}
 
 /** Minimal optimistic progress row for an item that had none yet — enough for
  *  every watched/seen predicate (checkmarks, badges, buildSeenKeys); load()
@@ -69,11 +115,16 @@ export const useStateStore = create<StateStore>((set, get) => ({
   myList: [],
   ratings: [],
   progress: [],
+  myListKeys: new Set<string>(),
+  ratingByKey: new Map<string, number>(),
+  watchedKeys: new Set<string>(),
+  seenTopKeys: new Set<string>(),
+  watchedEpisodeCountByShow: new Map<number, number>(),
 
   load: async () => {
     try {
       const data = await api.get<StateSnapshot>("/api/state");
-      set({ loaded: true, myList: data.myList, ratings: data.ratings, progress: data.progress });
+      set({ loaded: true, ...withDerived({ myList: data.myList, ratings: data.ratings, progress: data.progress }) });
     } catch {
       // Keep whatever is already loaded: load() doubles as the rollback for
       // every optimistic mutation AND the resync on player close, so wiping to
@@ -84,20 +135,15 @@ export const useStateStore = create<StateStore>((set, get) => ({
     }
   },
 
-  reset: () => set({ loaded: false, ...EMPTY }),
+  reset: () => set({ loaded: false, ...withDerived(EMPTY) }),
 
-  isInMyList: (itemType, itemId) => get().myList.some((e) => e.itemType === itemType && e.itemId === itemId),
-  ratingFor: (itemType, itemId) => get().ratings.find((e) => e.itemType === itemType && e.itemId === itemId)?.value ?? 0,
+  isInMyList: (itemType, itemId) => get().myListKeys.has(keyOf(itemType, itemId)),
+  ratingFor: (itemType, itemId) => get().ratingByKey.get(keyOf(itemType, itemId)) ?? 0,
 
   isWatched: (itemType, itemId, totalEpisodes) => {
-    if (itemType === "movie") return get().progress.some((p) => p.itemType === "movie" && p.itemId === itemId && p.watched);
+    if (itemType === "movie") return get().watchedKeys.has(keyOf("movie", itemId));
     if (!totalEpisodes || totalEpisodes <= 0) return false;
-    const watchedEpisodes = new Set(
-      get()
-        .progress.filter((p) => p.itemType === "episode" && p.topType === "show" && p.topId === itemId && p.watched)
-        .map((p) => p.itemId),
-    );
-    return watchedEpisodes.size >= totalEpisodes;
+    return (get().watchedEpisodeCountByShow.get(itemId) ?? 0) >= totalEpisodes;
   },
 
   toggleMyList: async (itemType, itemId) => {
@@ -105,7 +151,7 @@ export const useStateStore = create<StateStore>((set, get) => ({
     const next = already
       ? get().myList.filter((e) => !(e.itemType === itemType && e.itemId === itemId))
       : [...get().myList, { itemType, itemId, createdAt: Date.now() }];
-    set({ myList: next });
+    set(withDerived({ myList: next }));
     try {
       await api.post("/api/state", { kind: "myList", itemType, itemId, add: !already });
     } catch {
@@ -117,7 +163,7 @@ export const useStateStore = create<StateStore>((set, get) => ({
     const current = get().ratingFor(itemType, itemId);
     const nextValue = current === value ? 0 : value;
     const withoutEntry = get().ratings.filter((e) => !(e.itemType === itemType && e.itemId === itemId));
-    set({ ratings: nextValue === 0 ? withoutEntry : [...withoutEntry, { itemType, itemId, value: nextValue, createdAt: Date.now() }] });
+    set(withDerived({ ratings: nextValue === 0 ? withoutEntry : [...withoutEntry, { itemType, itemId, value: nextValue, createdAt: Date.now() }] }));
     try {
       await api.post("/api/state", { kind: "rating", itemType, itemId, value: nextValue });
     } catch {
@@ -140,7 +186,7 @@ export const useStateStore = create<StateStore>((set, get) => ({
 
     if (!watched) {
       // "Non vu" erases progression + flag — mirror the server's DELETE.
-      set({ progress: get().progress.filter((p) => !matches(p)) });
+      set(withDerived({ progress: get().progress.filter((p) => !matches(p)) }));
     } else {
       const next = get().progress.map((p) => (matches(p) ? { ...p, watched: true, position: p.duration, dismissed: false } : p));
       const have = new Set(next.filter(matches).map((p) => p.itemId));
@@ -151,7 +197,7 @@ export const useStateStore = create<StateStore>((set, get) => ({
           if (!have.has(episodeId)) next.push(optimisticWatchedEntry("episode", episodeId, "show", itemId));
         }
       }
-      set({ progress: next });
+      set(withDerived({ progress: next }));
     }
 
     try {
@@ -168,9 +214,11 @@ export const useStateStore = create<StateStore>((set, get) => ({
     // duration zeroed to mirror the server's summary shaping: the Continue
     // Watching predicate (`duration > 0 && …`) is what actually hides the
     // entry, everywhere at once. Position is kept — resume still works.
-    set({
-      progress: get().progress.map((p) => (p.itemType === itemType && p.itemId === itemId ? { ...p, dismissed: true, duration: 0 } : p)),
-    });
+    set(
+      withDerived({
+        progress: get().progress.map((p) => (p.itemType === itemType && p.itemId === itemId ? { ...p, dismissed: true, duration: 0 } : p)),
+      }),
+    );
     try {
       await api.post("/api/state", { kind: "dismissProgress", itemType, itemId });
     } catch {

@@ -19,6 +19,12 @@ const KNOWN_CACHES = [STATIC_CACHE, IMAGE_CACHE, SHELL_CACHE];
 // Plafond du cache d'affiches : au-delà, on évince les entrées les plus
 // anciennes (ordre d'insertion de CacheStorage) — pas de LRU exact, inutile ici.
 const IMAGE_CACHE_MAX_ENTRIES = 400;
+// Plafond du cache statique : les chunks /_next/static sont fingerprientés par
+// build, donc chaque déploiement ORPHELINE les anciens — sans borne, des
+// dizaines de Mo de JS mort s'empilaient dans CacheStorage à chaque mise à
+// jour de l'instance. L'éviction par insertion suffit : les entrées du build
+// courant sont re-fetchées (donc ré-insérées en fin) au premier chargement.
+const STATIC_CACHE_MAX_ENTRIES = 150;
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -52,12 +58,17 @@ async function cacheFirst(cacheName, request) {
   if (hit) return hit;
   const response = await fetch(request);
   if (response.ok) {
-    await cache.put(request, response.clone());
-    if (cacheName === IMAGE_CACHE) {
+    // try/catch : un QuotaExceededError sur put/éviction ne doit JAMAIS faire
+    // échouer une réponse pourtant récupérée avec succès.
+    try {
+      await cache.put(request, response.clone());
+      const max = cacheName === IMAGE_CACHE ? IMAGE_CACHE_MAX_ENTRIES : STATIC_CACHE_MAX_ENTRIES;
       const keys = await cache.keys();
-      if (keys.length > IMAGE_CACHE_MAX_ENTRIES) {
-        await Promise.all(keys.slice(0, keys.length - IMAGE_CACHE_MAX_ENTRIES).map((k) => cache.delete(k)));
+      if (keys.length > max) {
+        await Promise.all(keys.slice(0, keys.length - max).map((k) => cache.delete(k)));
       }
+    } catch {
+      /* stockage plein/indisponible — on sert la réponse réseau telle quelle */
     }
   }
   return response;
