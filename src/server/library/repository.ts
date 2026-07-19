@@ -2,6 +2,8 @@
 // Per-account signals (my list, ratings, progress) live in /api/state, never
 // here, so this snapshot is USER-INDEPENDENT — identical for every profile —
 // and can be built once per library change and memoised/ETag'd across requests.
+// (Kids profiles do NOT see it verbatim: GET /api/library filters a copy per
+// request and varies its ETag — the memoised object itself stays unfiltered.)
 
 import path from "path";
 import { getDb } from "../db";

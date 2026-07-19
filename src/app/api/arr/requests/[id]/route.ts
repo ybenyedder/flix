@@ -18,6 +18,11 @@ export async function DELETE(request: Request, context: Ctx) {
   if (csrf) return csrf;
   const user = getRequestUser(request);
   if (!user) return json({ error: "Unauthorized" }, { status: 401 });
+  // Same kids gate as the sibling arr routes (a kids profile has no requests
+  // UI at all). Deliberately NOT gated on isArrEnabled(): deleting a stale
+  // request row is DB-only — no arr I/O — and must stay possible after the
+  // operator turns the feature off, or old rows could never be cleaned up.
+  if (user.is_kids === 1) return json({ error: "Indisponible" }, { status: 403 });
 
   const { id: idRaw } = await context.params;
   const id = Number.parseInt(idRaw, 10);

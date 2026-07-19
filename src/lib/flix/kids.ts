@@ -39,9 +39,10 @@ export function isAllowedForKids(contentRating: string | null | undefined): bool
   return true;
 }
 
-/** Filter applied uniformly wherever a kids profile browses/searches the
- *  catalogue on the client (the shared /api/library snapshot itself stays
- *  user-independent and unfiltered, by design — see repository.ts). */
+/** Filter applied wherever a kids profile browses the catalogue. The server
+ *  is the authoritative gate (GET /api/library filters the shared snapshot
+ *  per-profile before it leaves the process); the client-side use in
+ *  useCatalog.ts is defense in depth on top of that, not the only barrier. */
 export function filterForProfile<T extends { contentRating: string | null }>(items: T[], isKids: boolean): T[] {
   if (!isKids) return items;
   return items.filter((item) => isAllowedForKids(item.contentRating));

@@ -227,6 +227,27 @@ function itemExists(itemType: ListItemType, itemId: number): boolean {
   return Boolean(getDb().prepare(`SELECT 1 FROM ${table} WHERE id = ?`).get(itemId));
 }
 
+/** Kids gate for the /api/state mutations. Returns false only when the item
+ *  EXISTS and carries an adult rating — an unknown id returns true so the
+ *  caller falls through to its normal "Introuvable" 404, keeping an adult
+ *  title byte-identical to a nonexistent one (no existence oracle; same trick
+ *  as playback/access.ts isFileAllowedForUser). Episodes inherit their show's
+ *  rating — episodes carry none of their own. */
+export function itemAllowedForKidsProfile(itemType: "movie" | "show" | "episode", itemId: number): boolean {
+  const db = getDb();
+  let row: { content_rating: string | null } | undefined;
+  if (itemType === "episode") {
+    row = db.prepare("SELECT s.content_rating AS content_rating FROM episodes e JOIN shows s ON s.id = e.show_id WHERE e.id = ?").get(itemId) as
+      | { content_rating: string | null }
+      | undefined;
+  } else {
+    const table = itemType === "movie" ? "movies" : "shows";
+    row = db.prepare(`SELECT content_rating FROM ${table} WHERE id = ?`).get(itemId) as { content_rating: string | null } | undefined;
+  }
+  if (!row) return true;
+  return isAllowedForKids(row.content_rating);
+}
+
 export function toggleMyList(userId: number, itemType: ListItemType, itemId: number, add: boolean): { ok: boolean; error?: string } {
   if (add && !itemExists(itemType, itemId)) return { ok: false, error: "Introuvable" };
   const db = getDb();

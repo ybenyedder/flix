@@ -21,6 +21,7 @@ import {
   recordWatchEvent,
   setWatched,
   dismissProgress,
+  itemAllowedForKidsProfile,
   type ListItemType,
   type ProgressItemType,
   type WatchedItemType,
@@ -88,8 +89,15 @@ export async function POST(request: Request) {
   const itemId = Number(body.itemId);
   if (!Number.isInteger(itemId) || itemId <= 0) return json({ error: "itemId invalide" }, { status: 400 });
 
+  // KIDS GATE — a kids profile must not mutate (nor probe: {ok:true} vs 404 is
+  // an existence oracle) adult titles. The refusal reuses the exact 404 body
+  // every mutation returns for an unknown id, so an adult title stays
+  // byte-identical to a nonexistent one (CLAUDE.md invariant).
+  const kidsBlocked = (itemType: "movie" | "show" | "episode") => user.is_kids === 1 && !itemAllowedForKidsProfile(itemType, itemId);
+
   if (body.kind === "myList") {
     if (!isListItemType(body.itemType)) return json({ error: "itemType invalide" }, { status: 400 });
+    if (kidsBlocked(body.itemType)) return json({ error: "Introuvable" }, { status: 404 });
     const result = toggleMyList(user.id, body.itemType, itemId, body.add === true);
     if (!result.ok) return json({ error: result.error }, { status: 404 });
     return json({ ok: true });
@@ -97,6 +105,7 @@ export async function POST(request: Request) {
 
   if (body.kind === "rating") {
     if (!isListItemType(body.itemType)) return json({ error: "itemType invalide" }, { status: 400 });
+    if (kidsBlocked(body.itemType)) return json({ error: "Introuvable" }, { status: 404 });
     const value = Number(body.value);
     if (!Number.isInteger(value)) return json({ error: "value invalide" }, { status: 400 });
     const result = setRating(user.id, body.itemType, itemId, value);
@@ -106,6 +115,7 @@ export async function POST(request: Request) {
 
   if (body.kind === "progress") {
     if (!isProgressItemType(body.itemType)) return json({ error: "itemType invalide" }, { status: 400 });
+    if (kidsBlocked(body.itemType)) return json({ error: "Introuvable" }, { status: 404 });
     const position = Number(body.position);
     const duration = Number(body.duration);
     if (!Number.isFinite(position) || !Number.isFinite(duration) || position < 0 || duration < 0) {
@@ -132,6 +142,7 @@ export async function POST(request: Request) {
 
   if (body.kind === "setWatched") {
     if (!isWatchedItemType(body.itemType)) return json({ error: "itemType invalide" }, { status: 400 });
+    if (kidsBlocked(body.itemType)) return json({ error: "Introuvable" }, { status: 404 });
     if (typeof body.watched !== "boolean") return json({ error: "watched invalide" }, { status: 400 });
     const result = setWatched(user.id, body.itemType, itemId, body.watched);
     if (!result.ok) return json({ error: result.error }, { status: 404 });
@@ -140,6 +151,7 @@ export async function POST(request: Request) {
 
   if (body.kind === "dismissProgress") {
     if (!isProgressItemType(body.itemType)) return json({ error: "itemType invalide" }, { status: 400 });
+    if (kidsBlocked(body.itemType)) return json({ error: "Introuvable" }, { status: 404 });
     const result = dismissProgress(user.id, body.itemType, itemId);
     if (!result.ok) return json({ error: result.error }, { status: 404 });
     return json({ ok: true });
@@ -147,6 +159,7 @@ export async function POST(request: Request) {
 
   if (body.kind === "watchEvent") {
     if (!isProgressItemType(body.itemType)) return json({ error: "itemType invalide" }, { status: 400 });
+    if (kidsBlocked(body.itemType)) return json({ error: "Introuvable" }, { status: 404 });
     if (!isWatchEventKind(body.eventKind)) return json({ error: "eventKind invalide" }, { status: 400 });
     const ratio = Number(body.ratio);
     const seconds = Number(body.seconds);

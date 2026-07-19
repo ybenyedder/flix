@@ -8,7 +8,7 @@
 // handlers, driven with real signed session tokens. Isolated temp data +
 // media dirs, like playback.test.ts.
 
-import { test, before } from "node:test";
+import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "fs";
 import os from "os";
@@ -40,6 +40,8 @@ let streamGET: typeof import("../src/app/api/stream/[fileId]/route").GET;
 let subsGET: typeof import("../src/app/api/subs/[id]/route").GET;
 let decisionPOST: typeof import("../src/app/api/play/decision/route").POST;
 let sessionPOST: typeof import("../src/app/api/play/session/route").POST;
+let libraryGET: typeof import("../src/app/api/library/route").GET;
+let statePOST: typeof import("../src/app/api/state/route").POST;
 
 let kidToken = "";
 let adultToken = "";
@@ -52,12 +54,22 @@ before(async () => {
   ({ GET: subsGET } = await import("../src/app/api/subs/[id]/route"));
   ({ POST: decisionPOST } = await import("../src/app/api/play/decision/route"));
   ({ POST: sessionPOST } = await import("../src/app/api/play/session/route"));
+  ({ GET: libraryGET } = await import("../src/app/api/library/route"));
+  ({ POST: statePOST } = await import("../src/app/api/state/route"));
 
   const kid = Auth.createUser("kidprofile", "password123", { isKids: true });
   const adult = Auth.createUser("adultprofile", "password123");
   if (!kid.ok || !kid.id || !adult.ok || !adult.id) throw new Error("failed to create test profiles");
   kidToken = Auth.createSessionToken(kid.id);
   adultToken = Auth.createSessionToken(adult.id);
+});
+
+// The library route's ensureLibraryReady() spins up the auto-rescan watcher;
+// its fs.watch handle would keep the test process alive forever — same
+// teardown watcher.test.ts does after every case.
+after(async () => {
+  const { stopWatcher } = await import("../src/server/library/watcher");
+  stopWatcher();
 });
 
 type DB = ReturnType<typeof getDb>;
@@ -237,6 +249,80 @@ test("GET /api/subs/<id>: kids profile gets 404 for an adult title's subtitle, a
   assert.equal(adultRes.status, 200);
   assert.match(await adultRes.text(), /^WEBVTT/);
   assert.match(adultRes.headers.get("cache-control") ?? "", /private/); // per-profile response — never shared-cacheable
+});
+
+// ============================================================================
+// Catalogue + state mutations — the gate must hold on the LIST and WRITE paths
+// too, not just playback (a kids profile reading /api/library raw, or probing
+// POST /api/state, must learn nothing the 404s above are hiding).
+// ============================================================================
+
+test("GET /api/library: kids profile gets a filtered catalogue, adjusted counts and a distinct ETag", async () => {
+  const db = getDb();
+  insertMovieFile(db, "R");
+  insertMovieFile(db, "G");
+  insertEpisodeFile(db, "TV-MA");
+  insertEpisodeFile(db, "TV-Y");
+
+  type Body = { movies: { contentRating: string | null }[]; shows: { contentRating: string | null }[]; countMovies: number; countShows: number };
+  const adultRes = await libraryGET(authed("http://localhost:4247/api/library", adultToken));
+  assert.equal(adultRes.status, 200);
+  const adultBody = (await adultRes.json()) as Body;
+  const kidRes = await libraryGET(authed("http://localhost:4247/api/library", kidToken));
+  assert.equal(kidRes.status, 200);
+  const kidBody = (await kidRes.json()) as Body;
+
+  assert.ok(adultBody.movies.some((m) => m.contentRating === "R"), "adult profile must see the adult movie");
+  assert.ok(!kidBody.movies.some((m) => m.contentRating === "R"), "kids profile must not see the adult movie");
+  assert.ok(kidBody.movies.some((m) => m.contentRating === "G"), "kids profile keeps kid-safe titles");
+  assert.ok(!kidBody.shows.some((s) => s.contentRating === "TV-MA"));
+  assert.ok(kidBody.shows.some((s) => s.contentRating === "TV-Y"));
+  // Counts must follow the filtered lists — a bigger count would announce how
+  // many titles were hidden.
+  assert.equal(kidBody.countMovies, kidBody.movies.length);
+  assert.equal(kidBody.countShows, kidBody.shows.length);
+  assert.ok(kidBody.countMovies < adultBody.countMovies);
+  // The weak validator differs per profile kind, so a kid 304 can never
+  // validate an adult body cached by an intermediary (or the same browser
+  // after a profile switch).
+  assert.ok(adultRes.headers.get("etag"));
+  assert.notEqual(kidRes.headers.get("etag"), adultRes.headers.get("etag"));
+});
+
+test("POST /api/state: kids mutations on an adult title return the exact unknown-id 404 (no existence oracle)", async () => {
+  const db = getDb();
+  const movieIdOf = (fileId: number) => (db.prepare("SELECT movie_id AS id FROM media_files WHERE id = ?").get(fileId) as { id: number }).id;
+  const adultId = movieIdOf(insertMovieFile(db, "R"));
+  const safeId = movieIdOf(insertMovieFile(db, "PG"));
+
+  const post = (token: string, payload: unknown) =>
+    statePOST(authed("http://localhost:4247/api/state", token, { method: "POST", body: JSON.stringify(payload) }));
+
+  // The canonical body every mutation returns for an id that doesn't exist…
+  const unknown = await post(kidToken, { kind: "myList", itemType: "movie", itemId: 999_999, add: true });
+  assert.equal(unknown.status, 404);
+  const unknownBody = await unknown.text();
+
+  // …must be byte-identical to the refusal on an existing adult title.
+  const denied = await post(kidToken, { kind: "myList", itemType: "movie", itemId: adultId, add: true });
+  assert.equal(denied.status, 404);
+  assert.equal(await denied.text(), unknownBody);
+  assert.equal((db.prepare("SELECT COUNT(*) AS n FROM my_list WHERE item_type = 'movie' AND item_id = ?").get(adultId) as { n: number }).n, 0, "the refused write must not land");
+
+  // Every kind is gated, not just myList.
+  assert.equal((await post(kidToken, { kind: "rating", itemType: "movie", itemId: adultId, value: 1 })).status, 404);
+  assert.equal((await post(kidToken, { kind: "setWatched", itemType: "movie", itemId: adultId, watched: true })).status, 404);
+  assert.equal((await post(kidToken, { kind: "progress", itemType: "movie", itemId: adultId, position: 10, duration: 100 })).status, 404);
+  assert.equal((await post(kidToken, { kind: "watchEvent", itemType: "movie", itemId: adultId, eventKind: "complete", ratio: 1, seconds: 100 })).status, 404);
+  assert.equal((await post(kidToken, { kind: "dismissProgress", itemType: "movie", itemId: adultId })).status, 404);
+
+  // An episode inherits its show's rating through the episode→show join.
+  const adultEpId = (db.prepare("SELECT episode_id AS id FROM media_files WHERE id = ?").get(insertEpisodeFile(db, "TV-MA")) as { id: number }).id;
+  assert.equal((await post(kidToken, { kind: "progress", itemType: "episode", itemId: adultEpId, position: 5, duration: 42 })).status, 404);
+
+  // Kid-safe titles stay writable for kids; adult profiles are never gated.
+  assert.equal((await post(kidToken, { kind: "myList", itemType: "movie", itemId: safeId, add: true })).status, 200);
+  assert.equal((await post(adultToken, { kind: "myList", itemType: "movie", itemId: adultId, add: true })).status, 200);
 });
 
 // Kept LAST: it deliberately exhausts the per-client rate-limit bucket, which
