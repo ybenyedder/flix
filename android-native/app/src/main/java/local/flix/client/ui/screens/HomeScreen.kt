@@ -42,8 +42,6 @@ import local.flix.client.ui.AppViewModel
 import local.flix.client.ui.UiState
 import local.flix.client.ui.components.FlixImage
 import local.flix.client.ui.components.ProfileAvatar
-import local.flix.client.ui.components.QualityBadge
-import local.flix.client.ui.components.formatDuration
 import local.flix.client.ui.theme.LocalFlixColors
 import local.flix.core.model.CatalogItem
 import local.flix.core.model.ProgressSummary
@@ -63,20 +61,20 @@ fun HomeScreen(vm: AppViewModel, ui: UiState) {
             }
         }
         items(rows) { row ->
-            ContentRow(vm, ui, row.title, row.items)
+            ContentRow(vm, ui, row)
         }
         item { Spacer(Modifier.height(24.dp)) }
     }
 }
 
-private data class HomeRow(val title: String, val items: List<CatalogItem>)
+private data class HomeRow(val title: String, val items: List<CatalogItem>, val continueRow: Boolean = false)
 
 private fun buildHomeRows(ui: UiState): List<HomeRow> {
     val rows = mutableListOf<HomeRow>()
 
     val continueItems = ui.userState.progress.filter { it.ratio in 0.02..0.92 }
     if (continueItems.isNotEmpty()) {
-        rows.add(HomeRow("Continuer à regarder", continueItems.mapNotNull { ui.library.byKey["${it.topType}:${it.topId}"] }))
+        rows.add(HomeRow("Continuer à regarder", continueItems.mapNotNull { ui.library.byKey["${it.topType}:${it.topId}"] }, continueRow = true))
     }
 
     if (ui.userState.myList.isNotEmpty()) {
@@ -173,25 +171,28 @@ private fun BillboardHero(vm: AppViewModel, ui: UiState, item: CatalogItem) {
 }
 
 @Composable
-private fun ContentRow(vm: AppViewModel, ui: UiState, title: String, items: List<CatalogItem>) {
+private fun ContentRow(vm: AppViewModel, ui: UiState, row: HomeRow) {
     val colors = LocalFlixColors.current
     Column(Modifier.padding(top = 18.dp)) {
-        Text(title, color = colors.text, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 16.dp, bottom = 8.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp)) {
-            items(items, key = { it.key }) { item ->
+        Text(row.title, color = colors.text, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 16.dp, bottom = 10.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp)) {
+            items(row.items, key = { it.key }) { item ->
                 val progress = ui.userState.progress.firstOrNull { "${it.topType}:${it.topId}" == item.key }
-                MediaCard(vm, ui, item, progress)
+                if (row.continueRow) ContinueCard(vm, item, progress) else PosterCard(vm, ui, item, progress)
             }
         }
     }
 }
 
+private const val POSTER_W = 118
+private const val POSTER_H = 177 // 2:3
+
 @Composable
-private fun MediaCard(vm: AppViewModel, ui: UiState, item: CatalogItem, progress: ProgressSummary?) {
+private fun PosterCard(vm: AppViewModel, ui: UiState, item: CatalogItem, progress: ProgressSummary?) {
     val colors = LocalFlixColors.current
     val match = ui.recommend.matchScores[item.key]
     Column(
-        Modifier.width(148.dp).clickable {
+        Modifier.width(POSTER_W.dp).clickable {
             // Only resume UNFINISHED progress: a watched row has position ==
             // duration server-side, so "resuming" it would start on the last
             // millisecond, fire STATE_ENDED instantly and log a bogus
@@ -200,27 +201,82 @@ private fun MediaCard(vm: AppViewModel, ui: UiState, item: CatalogItem, progress
             else vm.openDetail(item.type, item.id)
         },
     ) {
-        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(4.dp))) {
-            FlixImage(vm.api, item.backdropHash ?: item.posterHash, width = 480, modifier = Modifier.fillMaxSize()) {
-                Box(Modifier.fillMaxSize().background(Color(0xFF232323)), contentAlignment = Alignment.Center) {
-                    Text(item.title, color = colors.textMuted, fontSize = 11.sp, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(4.dp))
+        Box(Modifier.width(POSTER_W.dp).height(POSTER_H.dp).clip(RoundedCornerShape(6.dp))) {
+            // Prefer the vertical 2:3 poster ("cover"), fall back to a cropped
+            // backdrop/thumb, then to a gradient carrying the title so a card is
+            // never an empty grey box.
+            FlixImage(vm.api, item.posterHash ?: item.backdropHash ?: item.thumbHash, width = 480, modifier = Modifier.fillMaxSize()) {
+                Box(
+                    Modifier.fillMaxSize().background(Brush.linearGradient(listOf(colors.surfaceHover, colors.surface))),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(item.title, color = colors.textMuted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 3, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(8.dp))
+                }
+            }
+            qualityBadgeLabel(item.qualityHeight, item.qualityHdr)?.let { q ->
+                Box(Modifier.align(Alignment.TopEnd).padding(5.dp).clip(RoundedCornerShape(3.dp)).background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 5.dp, vertical = 1.dp)) {
+                    Text(q, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                 }
             }
             if (progress != null && progress.ratio > 0.02) {
-                Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = 0.3f))) {
+                Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color.Black.copy(alpha = 0.4f))) {
                     Box(Modifier.fillMaxWidth(progress.ratio.toFloat()).height(3.dp).background(colors.accent))
                 }
             }
         }
-        Spacer(Modifier.height(4.dp))
-        Text(item.title, color = colors.text, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Row {
-            if (match != null) {
-                Text("$match% pertinent", color = colors.accentHover2(), fontSize = 10.sp)
-            } else {
-                item.year?.let { Text(it.toString(), color = colors.textFaint, fontSize = 10.sp) }
+        Spacer(Modifier.height(6.dp))
+        Text(item.title, color = colors.text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (match != null) {
+            Text("$match% pertinent", color = colors.accentHover2(), fontSize = 10.sp, maxLines = 1)
+        } else {
+            val meta = listOfNotNull(item.year?.toString(), if (item.isMovie) null else item.seasonCount?.let { "$it saison${if (it > 1) "s" else ""}" }).joinToString(" · ")
+            if (meta.isNotBlank()) Text(meta, color = colors.textFaint, fontSize = 10.sp, maxLines = 1)
+        }
+    }
+}
+
+private const val LAND_W = 260
+
+@Composable
+private fun ContinueCard(vm: AppViewModel, item: CatalogItem, progress: ProgressSummary?) {
+    val colors = LocalFlixColors.current
+    Column(
+        Modifier.width(LAND_W.dp).clickable {
+            if (progress != null && !progress.watched) vm.play(progress.topType, progress.topId, if (progress.itemType == "episode") progress.itemId else null, (progress.position * 1000).toLong())
+            else vm.openDetail(item.type, item.id)
+        },
+    ) {
+        Box(Modifier.width(LAND_W.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(6.dp))) {
+            FlixImage(vm.api, item.thumbHash ?: item.backdropHash ?: item.posterHash, width = 480, modifier = Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxSize().background(colors.surfaceHover))
+            }
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.6f))))
+            Box(Modifier.align(Alignment.Center).size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(26.dp))
+            }
+            if (progress != null && progress.ratio > 0.02) {
+                Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color.Black.copy(alpha = 0.4f))) {
+                    Box(Modifier.fillMaxWidth(progress.ratio.toFloat()).height(3.dp).background(colors.accent))
+                }
             }
         }
+        Spacer(Modifier.height(6.dp))
+        Text(item.title, color = colors.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+private fun qualityBadgeLabel(height: Int?, hdr: Boolean): String? {
+    val res = when {
+        height == null -> null
+        height >= 2000 -> "4K"
+        height >= 1000 -> "HD"
+        else -> null
+    }
+    return when {
+        res != null && hdr -> "$res·HDR"
+        res != null -> res
+        hdr -> "HDR"
+        else -> null
     }
 }
 
