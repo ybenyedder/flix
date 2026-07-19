@@ -6,6 +6,9 @@
   "main": "desktop/main.js",
   "license": "UNLICENSED",
   "homepage": "https://github.com/ybenyedder/flix",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev -p 4247",
     "build": "next build",

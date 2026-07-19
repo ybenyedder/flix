@@ -8,9 +8,16 @@ on:
 permissions:
   contents: read
 
+# Rapid successive pushes used to stack redundant full runs; a hung test
+# (zombie ffmpeg) used to burn the 6h default job timeout.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -47,6 +54,37 @@ jobs:
         run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
+
+  # The Dockerfile used to be built for the FIRST time at release-tag time —
+  # a change breaking it (file newly excluded by .dockerignore, native dep,
+  # prepare-standalone prune) passed green CI and only exploded on `v*`.
+  # Build (no push) + boot + /api/health smoke on every push/PR instead.
+  docker-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: flix:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test /api/health
+        run: |
+          docker run -d --name flix-ci -e PORT=4247 -p 4247:4247 flix:ci
+          ok=""
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4247/api/health >/dev/null 2>&1; then ok=1; break; fi
+            sleep 2
+          done
+          docker logs flix-ci || true
+          docker rm -f flix-ci || true
+          [ "$ok" = "1" ]
 
   # NOTE: release artifacts (desktop installers + the Android/Android TV
   # APKs) are built and attached to the GitHub Release by release.yml, which

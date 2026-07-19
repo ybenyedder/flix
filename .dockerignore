@@ -23,3 +23,14 @@ docker-compose.yml
 videos
 media
 data
+# SECRETS: vpn/gluetun.env holds the Mullvad WireGuard private key — COPY . .
+# in the build stage would otherwise pull it into the build layer/cache even
+# though the runtime stage never sees it. Same defence for any .env file.
+vpn
+.env
+.env.*
+# local one-off artifacts that only bloat the build context
+flix-standalone-*.tar.gz
+scratch_isotest
+dist-electron-server
+.claude

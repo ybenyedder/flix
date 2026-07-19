@@ -90,7 +90,12 @@ services:
       TZ: ${TZ:-Europe/Paris}
       UMASK: "002"
     ports:
-      - "9696:9696"
+      # Loopback-only like the qBittorrent WebUI above — Bazarr ships with NO
+      # auth by default and Prowlarr/Sonarr/Radarr hold each other's API keys,
+      # so publishing them on 0.0.0.0 hands download control to the whole
+      # network. Set ARR_BIND=0.0.0.0 to expose them deliberately (e.g. behind
+      # a firewall you trust).
+      - "${ARR_BIND:-127.0.0.1}:9696:9696"
     volumes:
       - prowlarr-config:/config
 
@@ -107,7 +112,8 @@ services:
       TZ: ${TZ:-Europe/Paris}
       UMASK: "002"
     ports:
-      - "8989:8989"
+      # Loopback-only — see the note on prowlarr's port. ARR_BIND=0.0.0.0 to expose.
+      - "${ARR_BIND:-127.0.0.1}:8989:8989"
     volumes:
       - sonarr-config:/config
       - ./media:/data
@@ -125,7 +131,8 @@ services:
       TZ: ${TZ:-Europe/Paris}
       UMASK: "002"
     ports:
-      - "7878:7878"
+      # Loopback-only — see the note on prowlarr's port. ARR_BIND=0.0.0.0 to expose.
+      - "${ARR_BIND:-127.0.0.1}:7878:7878"
     volumes:
       - radarr-config:/config
       - ./media:/data
@@ -143,7 +150,9 @@ services:
       TZ: ${TZ:-Europe/Paris}
       UMASK: "002"
     ports:
-      - "6767:6767"
+      # Loopback-only — Bazarr has NO auth by default and holds the
+      # Sonarr/Radarr API keys. ARR_BIND=0.0.0.0 to expose deliberately.
+      - "${ARR_BIND:-127.0.0.1}:6767:6767"
     volumes:
       - bazarr-config:/config
       - ./media:/data

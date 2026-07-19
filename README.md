@@ -84,7 +84,10 @@ default — see below).
 
 ## Get started
 
-Requirements: Node 20+, `ffmpeg`/`ffprobe` on your `PATH`.
+Requirements: Node 20+ for local dev (22 recommended — the whole deployment
+chain: Docker image, CI, standalone bundle and Pterodactyl egg is locked to
+Node 22 because better-sqlite3's native binding is ABI-locked to the build
+Node), `ffmpeg`/`ffprobe` on your `PATH`.
 
 ```bash
 git clone https://github.com/ybenyedder/flix.git
@@ -239,6 +242,14 @@ All configuration is environment variables, with sane local-first defaults.
 | `FLIX_MAX_TRANSCODE_HEIGHT` | `1080` | Resolution ceiling for a software transcode |
 | `FLIX_TRICKPLAY` | off | Generate scrubbing-preview sprites during scan |
 | `FLIX_LOG_FORMAT` | `json` in production | `pretty` keeps human-readable log lines (panel consoles, `docker logs`) |
+| `FLIX_LOG_LEVEL` | `info` | Minimum log level (`debug`/`info`/`warn`/`error`) |
+| `FLIX_TOKEN` | *(off)* | Static bearer token accepted alongside sessions (LAN automations, kiosk clients) |
+| `FLIX_TRUST_PROXY` | off | Trust `X-Forwarded-For` for the client IP — **required behind a reverse proxy/tunnel**, otherwise the login rate-limit aggregates every client on the proxy's IP |
+| `FLIX_ALLOWED_ORIGINS` | *(same-origin)* | Extra origins allowed by the CSRF Origin check (comma-separated) |
+| `FLIX_MAX_SCAN_FILES` / `FLIX_MAX_SCAN_DEPTH` | `200000` / `12` | Library walk safety caps |
+| `FLIX_UPLOAD_CHUNK_BYTES` / `FLIX_UPLOAD_MAX_BYTES` | `64 MiB` / `100 GiB` | Admin chunked-upload tuning |
+| `FLIX_VPN_DIR` | `<repo>/vpn` | Where the opt-in Mullvad config writes `gluetun.env` |
+| `FLIX_ARR_*` | *(opt-in)* | Download-automation integration — see [docs/downloads-arr.md](docs/downloads-arr.md) |
 
 ## Architecture
 

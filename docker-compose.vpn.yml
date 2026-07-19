@@ -8,6 +8,12 @@
 #   docker compose -f docker-compose.yml -f docker-compose.arr.yml -f docker-compose.vpn.yml up -d
 #   (rootless podman: add -f docker-compose.podman.yml)
 #
+# REQUIRES docker compose v2 (>= 2.17): the `ports: !reset []` below relies on
+# its YAML !reset tag. The python `podman-compose` does NOT understand it —
+# depending on the version it either errors out or, worse, silently keeps
+# qBittorrent's ports published OUTSIDE the tunnel. Rootless podman is fine as
+# long as the compose FRONTEND is docker compose v2 over the podman socket.
+#
 # The WireGuard config in ./vpn/gluetun.env is written by Flix itself
 # (Paramètres → VPN Mullvad: paste your account number). Until it exists, gluetun
 # comes up with no tunnel and the kill-switch keeps qBittorrent offline — safe by

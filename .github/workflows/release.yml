@@ -21,10 +21,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Node 22 like every other job (Dockerfile, server-bundle, egg yolk) —
+      # the desktop server runs under ELECTRON_RUN_AS_NODE with an
+      # Electron-rebuilt better-sqlite3, so 20 vs 22 had no ABI impact here,
+      # but "all in sync" is the rule the comments below rely on.
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       # These installers are privileged, signed, published artifacts, so they
@@ -45,10 +49,12 @@ jobs:
       - name: Prepare desktop bundle
         run: npm run desktop:prepare
 
+      # Publish only from a v* tag: a workflow_dispatch run from a branch used
+      # to `--publish always` too, creating a stray draft release off-tag.
       - name: Build and publish Electron app
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --publish always
+        run: npx electron-builder --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
 
   # Build the standalone server bundle (the thing Docker/Pterodactyl deploys)
   # and attach it to the same release. Node 22 here is deliberate: the bundled
@@ -140,9 +146,27 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: android-actions/setup-android@v3
+      # The signing keystore is deliberately NOT in the repo (see .gitignore):
+      # CI receives it as a base64 repo secret and materialises it for both
+      # modules (app and tv share the same key). Fail fast with a clear error
+      # if the secrets are missing — gradle's own "storePassword is empty"
+      # failure is much harder to diagnose.
+      - name: Restore signing keystore
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_B64" ]; then
+            echo "::error::Secret ANDROID_KEYSTORE_B64 manquant — impossible de signer les APKs (gh secret set ANDROID_KEYSTORE_B64 < <(base64 -w0 flix.keystore))."
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_B64" | base64 -d > app/flix.keystore
+          cp app/flix.keystore tv/flix.keystore
       - name: Build release APKs
         env:
           FLIX_VERSION: ${{ github.ref_name }}
+          ANDROID_KEYSTORE_PWD: ${{ secrets.ANDROID_KEYSTORE_PWD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PWD: ${{ secrets.ANDROID_KEY_PWD }}
         run: ./gradlew :app:assembleRelease :tv:assembleRelease
       - name: Attach APKs to the release
         env:
