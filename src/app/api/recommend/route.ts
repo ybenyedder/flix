@@ -5,7 +5,7 @@
 // watch event), which calls invalidateReco() on write; see userState.ts.
 
 import { getRequestUser } from "@/server/auth";
-import { json } from "@/server/http";
+import { json, privateNoCache } from "@/server/http";
 import { matchPercent } from "@/lib/flix/reco";
 import { becauseYouWatched, discover, genreRows, pickBillboard, recommend, scoreAll, topTen } from "@/server/reco/engine";
 
@@ -62,9 +62,11 @@ export async function GET(request: Request) {
   const matchScores: Record<string, number> = {};
   for (const [key, score] of scoreAll(user.id, isKids)) matchScores[key] = matchPercent(score);
 
-  return json({
-    billboard: billboard ? { type: billboard.type, id: billboard.id } : null,
-    rows,
-    matchScores,
-  });
+  return privateNoCache(
+    json({
+      billboard: billboard ? { type: billboard.type, id: billboard.id } : null,
+      rows,
+      matchScores,
+    }),
+  );
 }

@@ -1,5 +1,5 @@
 import { verifyCredentials, createSessionToken, SESSION_COOKIE, sessionCookieOptions } from "@/server/auth";
-import { json, noStore, readJsonBody } from "@/server/http";
+import { json, noStore, checkLoginOrigin, readJsonBody } from "@/server/http";
 import { clientKey, usernameKey, rateLimitCheck, rateLimitFail, rateLimitReset, rateLimitWindow } from "@/server/rateLimit";
 
 export const runtime = "nodejs";
@@ -9,6 +9,13 @@ export const dynamic = "force-dynamic";
 const MAX_LOGIN_BODY_BYTES = 4 * 1024;
 
 export async function POST(request: Request) {
+  // Login-CSRF: a third-party page must not be able to silently sign the
+  // victim's browser into an attacker-chosen profile (poisoning its watch
+  // history/reco). checkCsrf doesn't apply pre-session, so this only rejects a
+  // PRESENT cross-site Origin — native clients that send none stay welcome.
+  const origin = checkLoginOrigin(request);
+  if (origin) return origin;
+
   // Unauthenticated endpoint — the size guard runs before anything else here,
   // ahead of even the rate limiter, since there's no session to key work off yet.
   const parsed = await readJsonBody<{ username?: string; password?: string }>(request, MAX_LOGIN_BODY_BYTES);

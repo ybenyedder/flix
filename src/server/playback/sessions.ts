@@ -146,7 +146,17 @@ function indexKeyframes(absPath: string): Promise<number[] | null> {
     }, KEYFRAME_INDEX_TIMEOUT_MS);
     proc.stdout.on("data", (c: Buffer) => {
       bytes += c.length;
-      if (bytes <= MAX_BYTES) chunks.push(c);
+      if (bytes > MAX_BYTES) {
+        // NEVER truncate: a cut-off CSV still parses as valid numbers, and the
+        // incomplete index would be persisted to media_files.keyframes forever
+        // — wrong HLS segment boundaries near the end of the file with no
+        // self-repair. Kill and report "no index" instead (same posture as
+        // frameExtract's stdout cap).
+        proc.kill("SIGKILL");
+        finish(null);
+        return;
+      }
+      chunks.push(c);
     });
     proc.on("error", () => finish(null));
     proc.on("close", (code) => {
@@ -363,6 +373,12 @@ export async function createSession(params: CreateSessionParams): Promise<Create
 
   const info = getFileStreamsForPlayback(params.fileId);
   if (!info || !info.video) return { ok: false, status: 422, error: "Aucun flux vidéo exploitable pour ce fichier" };
+  // A zero/unknown duration (partial probe) would make computeSegmentBoundaries
+  // return [0, 0]: a "valid" one-segment VOD playlist that plays ~4s then
+  // stops, with no error a client can act on. Refuse up front instead.
+  if (!(info.duration > 0)) {
+    return { ok: false, status: 422, error: "Durée du fichier inconnue — relancez une analyse de la bibliothèque" };
+  }
 
   // Replacing this device's existing session BEFORE the capacity check means a
   // page reload / video switch on the same device never eats into the cap —

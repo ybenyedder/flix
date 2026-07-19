@@ -11,6 +11,8 @@ import { getConfig } from "@/server/config";
 import { backupDbTo } from "@/server/db";
 import { toWebStream } from "@/server/playback/streamUtil";
 import { requireAdmin, json, applySecurityHeaders } from "@/server/http";
+import { getRequestUser } from "@/server/auth";
+import { rateLimitWindow } from "@/server/rateLimit";
 import { createLogger } from "@/server/logger";
 
 const log = createLogger("api:backup");
@@ -21,6 +23,14 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const denied = requireAdmin(request);
   if (denied) return denied;
+
+  // GET is CSRF-exempt by design, so a third-party page can loop <img src=…>
+  // with the admin's cookie and trigger full-DB online-backup copies (temp
+  // file + I/O) at will. A small per-admin window is ample for any human use.
+  const admin = getRequestUser(request);
+  if (rateLimitWindow(`backup:${admin?.id ?? "anon"}`, 5, 60_000)) {
+    return json({ error: "Trop de sauvegardes rapprochées — réessayez dans une minute." }, { status: 429, headers: { "Retry-After": "60" } });
+  }
 
   const { dataDir } = getConfig();
   // Random suffix: two concurrent downloads must never share (then unlink) the

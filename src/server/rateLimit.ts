@@ -57,6 +57,11 @@ export function rateLimitWindow(key: string, max: number, windowMs: number): boo
   const now = Date.now();
   const hits = (windows.get(key) ?? []).filter((t) => now - t < windowMs);
   hits.push(now);
+  // Only the newest max+1 timestamps can ever change the verdict (the dropped
+  // ones are older, so they expire first) — without this cap a sustained flood
+  // on one key grows the array unboundedly and re-filters it on every hit
+  // (quadratic work).
+  if (hits.length > max + 1) hits.splice(0, hits.length - (max + 1));
   windows.set(key, hits);
   if (windows.size > 5_000) {
     for (const [k, v] of windows) {

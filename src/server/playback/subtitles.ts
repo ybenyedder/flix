@@ -172,7 +172,12 @@ async function cacheVtt(content: string): Promise<string> {
     // of the same content hashes to the same name, sees it "cached", and the
     // broken cue file is served (immutable!) forever. Same pattern as the HLS
     // sessions' -hls_flags temp_file.
-    const tmp = `${file}.${process.pid}.tmp`;
+    // pid alone is NOT unique within this process: two different subtitle ids
+    // with identical VTT content (duplicated sidecars of one release — the
+    // inFlight map is per-id, it doesn't help) racing here would share one tmp
+    // and the loser's rename ENOENTs into a 500. Same pid+random suffix as
+    // images.ts.
+    const tmp = `${file}.${process.pid}.${crypto.randomBytes(4).toString("hex")}.tmp`;
     await fs.promises.writeFile(tmp, content, "utf8");
     await fs.promises.rename(tmp, file);
   }

@@ -3,7 +3,7 @@
 
 import { subscribeScan, getScanProgress } from "@/server/library/scanner";
 import { getRequestUser } from "@/server/auth";
-import { json } from "@/server/http";
+import { json, sseHeaders } from "@/server/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -77,13 +77,5 @@ export async function GET(request: Request) {
     },
   });
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      // Disable proxy buffering (nginx) so events flush immediately.
-      "X-Accel-Buffering": "no",
-    },
-  });
+  return new Response(stream, { headers: sseHeaders() });
 }

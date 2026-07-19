@@ -1,5 +1,6 @@
 import { changePassword, getRequestUser, createSessionToken, SESSION_COOKIE, sessionCookieOptions } from "@/server/auth";
 import { json, noStore, checkCsrf, readJsonBody } from "@/server/http";
+import { rateLimitWindow } from "@/server/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,14 @@ export async function POST(request: Request) {
   if (csrf) return csrf;
   const user = getRequestUser(request);
   if (!user) return json({ error: "Unauthorized" }, { status: 401 });
+
+  // The login throttles don't cover this route, yet it verifies currentPassword
+  // with the same scrypt cost: an authenticated (or stolen/XSS'd) session could
+  // brute-force the account password from inside the session (session → secret
+  // escalation) with unbounded CPU. Generous enough to never bother a human.
+  if (rateLimitWindow(`pwchange:${user.id}`, 5, 10 * 60_000)) {
+    return json({ error: "Trop de tentatives. Réessayez dans quelques minutes." }, { status: 429, headers: { "Retry-After": "600" } });
+  }
 
   const parsed = await readJsonBody<{ currentPassword?: string; newPassword?: string }>(request, MAX_PASSWORD_BODY_BYTES);
   if (!parsed.ok) return parsed.response;

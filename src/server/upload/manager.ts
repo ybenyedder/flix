@@ -261,6 +261,28 @@ export async function initUpload(input: {
 
 // --- append ------------------------------------------------------------------
 
+// Per-session write serialisation. The `offset === session.received` check
+// alone is a TOCTOU: two concurrent PUTs carrying the same offset (a buggy
+// resume client replaying a chunk still in flight) BOTH pass it, write the
+// same region, and `received` gets bumped twice past the real byte count —
+// wedging the session in a permanent 409 « Téléversement incomplet » at
+// finalize. Chain every append/finalize per uploadId instead; entries are
+// dropped once their chain drains so the map stays bounded.
+const sessionLocks = new Map<string, Promise<void>>();
+function withSessionLock<T>(id: string, fn: () => Promise<T>): Promise<T> {
+  const prev = sessionLocks.get(id) ?? Promise.resolve();
+  const run = prev.then(fn, fn);
+  const tail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  sessionLocks.set(id, tail);
+  void tail.then(() => {
+    if (sessionLocks.get(id) === tail) sessionLocks.delete(id);
+  });
+  return run;
+}
+
 function mapWriteError(err: unknown): UploadError {
   const code = (err as NodeJS.ErrnoException | null)?.code;
   if (code === "ENOSPC") return new UploadError(507, "Espace disque insuffisant");
@@ -274,7 +296,11 @@ function mapWriteError(err: unknown): UploadError {
  * streamed to the `.part` at the given position with backpressure, capped at
  * chunkSize + 64 KiB slack and never allowed past the declared total size.
  */
-export async function appendChunk(id: string, offset: number, stream: ReadableStream<Uint8Array> | null): Promise<{ received: number }> {
+export function appendChunk(id: string, offset: number, stream: ReadableStream<Uint8Array> | null): Promise<{ received: number }> {
+  return withSessionLock(id, () => doAppendChunk(id, offset, stream));
+}
+
+async function doAppendChunk(id: string, offset: number, stream: ReadableStream<Uint8Array> | null): Promise<{ received: number }> {
   const session = getSession(id);
   if (!session) throw new UploadError(404, "Session de téléversement introuvable");
   if (!Number.isInteger(offset) || offset < 0) throw new UploadError(400, "Décalage invalide");
@@ -341,7 +367,11 @@ export async function appendChunk(id: string, offset: number, stream: ReadableSt
  * movies/… or shows/… tree, does an atomic rename (EXDEV → copy-then-rename
  * fallback), drops the sidecar, and fires a background rescan.
  */
-export async function finalizeUpload(id: string): Promise<{ rel: string }> {
+export function finalizeUpload(id: string): Promise<{ rel: string }> {
+  return withSessionLock(id, () => doFinalizeUpload(id));
+}
+
+async function doFinalizeUpload(id: string): Promise<{ rel: string }> {
   const session = getSession(id);
   if (!session) throw new UploadError(404, "Session de téléversement introuvable");
 
@@ -355,8 +385,21 @@ export async function finalizeUpload(id: string): Promise<{ rel: string }> {
     throw new UploadError(409, "Téléversement incomplet", session.received);
   }
 
-  const finalAbs = resolveLibraryPath(session.targetRel);
+  let finalAbs = resolveLibraryPath(session.targetRel);
   if (!finalAbs) throw new UploadError(400, "Chemin cible invalide");
+
+  // The init-time existence check is HOURS stale by now (a TOCTOU spanning the
+  // whole upload): a file dropped/imported at the same path meanwhile — or a
+  // second session initialised for the same title before either finalized —
+  // would be silently OVERWRITTEN by the rename below. Re-check and divert to
+  // the same "(n)" sibling init uses; rejecting instead would throw away a
+  // fully-received multi-GB .part.
+  if (fs.existsSync(finalAbs)) {
+    finalAbs = renameOnConflict(finalAbs);
+    const rel = path.relative(getConfig().mediaDir, finalAbs).split(path.sep).join("/");
+    if (!resolveLibraryPath(rel)) throw new UploadError(400, "Chemin cible invalide");
+    session.targetRel = rel;
+  }
 
   await fs.promises.mkdir(path.dirname(finalAbs), { recursive: true });
 

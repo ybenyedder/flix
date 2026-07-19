@@ -12,7 +12,7 @@
 
 import type { UserRow } from "@/server/auth";
 import { getRequestUser } from "@/server/auth";
-import { checkCsrf, readJsonBody, json } from "@/server/http";
+import { checkCsrf, readJsonBody, json, sseHeaders } from "@/server/http";
 import { clientKey, rateLimitWindow } from "@/server/rateLimit";
 import {
   createRoom,
@@ -108,14 +108,7 @@ export async function GET(request: Request) {
     },
   });
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    },
-  });
+  return new Response(stream, { headers: sseHeaders() });
 }
 
 // --- POST mutations --------------------------------------------------------

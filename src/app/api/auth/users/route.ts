@@ -1,7 +1,7 @@
 // Admin-only profile management. List, create and delete profiles; each carries
 // its own my-list / ratings / progress / recommendations (see reco/engine.ts).
 import { getRequestUser, listUsers, createUser, deleteUser, setUserPassword, updateProfile, createSessionToken, SESSION_COOKIE, sessionCookieOptions } from "@/server/auth";
-import { json, noStore, checkCsrf, readJsonBody } from "@/server/http";
+import { json, noStore, privateNoCache, checkCsrf, readJsonBody } from "@/server/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,17 +13,19 @@ export async function GET(request: Request) {
   const user = getRequestUser(request);
   if (!user) return json({ error: "Unauthorized" }, { status: 401 });
   if (user.is_admin !== 1) return json({ error: "Réservé à l'administrateur" }, { status: 403 });
-  return json({
-    users: listUsers().map((u) => ({
-      id: u.id,
-      username: u.username,
-      isAdmin: u.is_admin === 1,
-      isKids: u.is_kids === 1,
-      avatar: u.avatar,
-      createdAt: u.created_at,
-    })),
-    me: user.id,
-  });
+  return privateNoCache(
+    json({
+      users: listUsers().map((u) => ({
+        id: u.id,
+        username: u.username,
+        isAdmin: u.is_admin === 1,
+        isKids: u.is_kids === 1,
+        avatar: u.avatar,
+        createdAt: u.created_at,
+      })),
+      me: user.id,
+    }),
+  );
 }
 
 export async function POST(request: Request) {

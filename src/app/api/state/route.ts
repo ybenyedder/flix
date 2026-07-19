@@ -12,7 +12,7 @@
 
 import { getRequestUser } from "@/server/auth";
 import { getDb } from "@/server/db";
-import { checkCsrf, readJsonBody, json } from "@/server/http";
+import { checkCsrf, readJsonBody, json, privateNoCache } from "@/server/http";
 import {
   getUserState,
   toggleMyList,
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
   if (!user) return json({ error: "Unauthorized" }, { status: 401 });
   // Pass the kids flag so a profile flipped from adult can't see its old adult
   // progress rows in "Continuer à regarder" (filtered in getProgressSummaries).
-  return json(getUserState(user.id, user.is_kids === 1));
+  return privateNoCache(json(getUserState(user.id, user.is_kids === 1)));
 }
 
 interface StateBody {

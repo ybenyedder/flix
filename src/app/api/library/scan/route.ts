@@ -1,5 +1,5 @@
 import { runScan, getScanProgress } from "@/server/library/scanner";
-import { checkAuth, requireAdmin, checkCsrf, json } from "@/server/http";
+import { checkAuth, requireAdmin, checkCsrf, json, privateNoCache } from "@/server/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const denied = checkAuth(request);
   if (denied) return denied;
-  return json(getScanProgress());
+  return privateNoCache(json(getScanProgress()));
 }
 
 // Triggering a full library scan is expensive (CPU/IO over the whole tree), so

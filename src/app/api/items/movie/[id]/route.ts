@@ -4,7 +4,7 @@
 
 import { getMovieDetail } from "@/server/library/repository";
 import { getRequestUser } from "@/server/auth";
-import { json } from "@/server/http";
+import { json, privateNoCache } from "@/server/http";
 import { isAllowedForKids } from "@/lib/flix/kids";
 
 export const runtime = "nodejs";
@@ -27,5 +27,5 @@ export async function GET(request: Request, context: Ctx) {
   if (user.is_kids === 1 && !isAllowedForKids(movie.contentRating)) {
     return json({ error: "Film introuvable" }, { status: 404 });
   }
-  return json(movie);
+  return privateNoCache(json(movie));
 }

@@ -27,6 +27,14 @@ export function noStore(res: NextResponse): NextResponse {
   return res;
 }
 
+/** Per-profile JSON (state, reco, search, item detail…): revalidate on every
+ *  use and NEVER let a shared cache hold it — a misconfigured proxy in front
+ *  of the instance could otherwise serve one profile's body to another. */
+export function privateNoCache(res: NextResponse): NextResponse {
+  res.headers.set("Cache-Control", "private, no-cache");
+  return res;
+}
+
 /** RFC 7232 If-None-Match check: tolerates a comma-separated list, the "*"
  *  wildcard and weak validators (a client/proxy may echo our ETag back as
  *  W/"…" — If-None-Match mandates weak comparison, so the prefix is ignored).
@@ -81,6 +89,25 @@ export function checkCsrf(request: Request): NextResponse | null {
     // A cookie-authed mutation with no Origin/Referer is suspicious — reject.
     return json({ error: "Origine de la requête manquante" }, { status: 403 });
   }
+  return validateRequestSource(request, source);
+}
+
+/**
+ * Login CSRF guard. Unlike checkCsrf there is no session to exempt on, and the
+ * native clients (Android's OkHttp, curl automations) legitimately send NO
+ * Origin header at all — so only a PRESENT cross-site Origin/Referer is
+ * rejected. That still closes the browser vector: every browser attaches
+ * Origin to a cross-origin POST, so a login-CSRF page (silently signing the
+ * victim into an attacker-chosen profile to poison its history/reco) cannot
+ * hide where it comes from.
+ */
+export function checkLoginOrigin(request: Request): NextResponse | null {
+  const source = request.headers.get("origin") ?? request.headers.get("referer");
+  if (!source) return null;
+  return validateRequestSource(request, source);
+}
+
+function validateRequestSource(request: Request, source: string): NextResponse | null {
   let sourceHost: string;
   try {
     sourceHost = new URL(source).host;
@@ -175,4 +202,18 @@ export function json(body: unknown, init?: ResponseInit): NextResponse {
 export function applySecurityHeaders(res: NextResponse): NextResponse {
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.headers.set(k, v);
   return res;
+}
+
+/** Header set for hand-built SSE responses (library/events, watch/room):
+ *  standard SSE headers merged with the same security headers json() stamps,
+ *  so streaming responses can't drift from the one-place rule above. */
+export function sseHeaders(): Record<string, string> {
+  return {
+    ...SECURITY_HEADERS,
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    // Disable proxy buffering (nginx) so events flush immediately.
+    "X-Accel-Buffering": "no",
+  };
 }

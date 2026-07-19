@@ -4,8 +4,10 @@
 // same-origin proxy paths so the CSP img-src 'self' holds.
 
 import { radarrLookup, sonarrLookup, type RadarrMovie, type SonarrSeries } from "./client";
-import { isInLibrary, requestStatusesByExternalId } from "./requests";
+import { requestStatusesByExternalId } from "./requests";
+import { buildTitleYearIndex, titleYearIndexHas } from "./libraryMatch";
 import { proxyPoster, pickPoster } from "./posters";
+import { getDb } from "../db";
 import type { ArrDiscoverItem } from "@/lib/flix/types";
 
 const PER_TYPE_LIMIT = 10;
@@ -15,6 +17,12 @@ const PER_TYPE_LIMIT = 10;
 export async function discover(query: string): Promise<ArrDiscoverItem[]> {
   const [movieRes, showRes] = await Promise.allSettled([radarrLookup(query), sonarrLookup(query)]);
   const statuses = requestStatusesByExternalId();
+  // Normalise the catalogue ONCE per call — the previous per-item isInLibrary
+  // re-scanned and re-normalised the whole movies/shows table for each of the
+  // up-to-20 results, on every search keystroke.
+  const db = getDb();
+  const movieIndex = buildTitleYearIndex(db, "movies");
+  const showIndex = buildTitleYearIndex(db, "shows");
   const items: ArrDiscoverItem[] = [];
 
   if (movieRes.status === "fulfilled") {
@@ -31,7 +39,7 @@ export async function discover(query: string): Promise<ArrDiscoverItem[]> {
         year,
         overview: typeof m.overview === "string" ? m.overview : null,
         posterUrl: proxyPoster(pickPoster(m)),
-        inLibrary: isInLibrary("movie", title, year),
+        inLibrary: titleYearIndexHas(movieIndex, title, year),
         requestStatus: (tmdbId != null ? statuses.get(`movie:${tmdbId}`) : undefined) ?? null,
       });
     }
@@ -51,7 +59,7 @@ export async function discover(query: string): Promise<ArrDiscoverItem[]> {
         year,
         overview: typeof s.overview === "string" ? s.overview : null,
         posterUrl: proxyPoster(pickPoster(s)),
-        inLibrary: isInLibrary("show", title, year),
+        inLibrary: titleYearIndexHas(showIndex, title, year),
         requestStatus: (tvdbId != null ? statuses.get(`show:${tvdbId}`) : undefined) ?? null,
       });
     }
