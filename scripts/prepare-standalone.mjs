@@ -35,8 +35,10 @@ cpSync(standalone, out, { recursive: true });
 const PRUNE = [
   // "vpn" contient gluetun.env = clé privée WireGuard Mullvad. Ne JAMAIS l'embarquer.
   "vpn", "data",
-  "dist-desktop", "dist-standalone", "android-native", "test", "build", "scripts", "src", "desktop",
-  "deploy", "docs", "electron-builder.yml", "Dockerfile", "docker-compose.yml", ".dockerignore",
+  "dist-desktop", "dist-standalone", "dist-electron-server", "android-native", "test", "build", "scripts", "src", "desktop",
+  "deploy", "docs", "media", "videos",
+  "electron-builder.yml", "Dockerfile", "docker-compose.yml", ".dockerignore", ".github",
+  "docker-compose.arr.yml", "docker-compose.vpn.yml", "docker-compose.dns.yml", "docker-compose.podman.yml",
   "eslint.config.mjs", "postcss.config.mjs", "next.config.ts", "tsconfig.json", "tsconfig.tsbuildinfo",
   "package-lock.json", ".gitignore",
 ];

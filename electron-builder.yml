@@ -24,9 +24,17 @@ publish:
 files:
   - desktop/**/*
   - package.json
+  # The shell requires nothing beyond Node/Electron builtins — but without this
+  # exclusion electron-builder auto-bundles every production dependency into
+  # the asar (~550 MB of Next/sharp/swc/tailwind the shell never loads; the
+  # server below already ships its own traced node_modules).
+  - "!node_modules/**"
 
 extraResources:
-  - from: .next/standalone
+  # Produced by scripts/prepare-desktop.mjs: a pruned COPY of .next/standalone
+  # with the Electron-ABI better-sqlite3 — never point this back at
+  # .next/standalone or the Node-ABI/Electron-ABI builds will cross-contaminate.
+  - from: dist-electron-server
     to: app/server
     filter:
       - "**/*"

@@ -5,9 +5,11 @@
 // (SQLite library, streaming, images, recommendations) on a private loopback
 // port, waits for it to come up, then loads it in a normal window.
 //
-// Unlike Auralis, Flix has no "connect to a remote server" mode: it is strictly
-// local-first, so the desktop shell always spawns its own server. The only
-// first-run choice is which folder holds the video library.
+// Two modes, chosen at first run (setup.html): the default LOCAL mode spawns
+// the bundled server on a private loopback port (100% offline), while entering
+// a server URL switches to REMOTE mode — the window then loads the operator's
+// own self-hosted Flix instance instead of spawning anything. Remote URLs are
+// validated (http/https only) and navigation stays pinned to that origin.
 //
 // Model: /home/pc/Documents/auralis_enterprise_grade/desktop/main.js, with the
 // remote-server flow and electron-updater removed entirely (zero network calls,
@@ -66,10 +68,24 @@ function writeSetup(cfg) {
 }
 
 // Validate + normalise a raw setup choice into { mediaDir: string|null, serverUrl: string|null }.
+// A non-empty serverUrl must be a parseable http(s) URL: anything else ("vlc://",
+// "file://", a bare word…) would be handed to loadURL in the MAIN window with
+// the preload attached — reject the whole config instead so setup.html shows
+// "Configuration invalide" and the user can fix the field.
 function normalizeSetup(raw) {
   if (!raw || typeof raw !== "object") return null;
   const dir = typeof raw.mediaDir === "string" && raw.mediaDir.trim() ? path.resolve(raw.mediaDir.trim()) : null;
-  const url = typeof raw.serverUrl === "string" && raw.serverUrl.trim() ? raw.serverUrl.trim() : null;
+  let url = null;
+  if (typeof raw.serverUrl === "string" && raw.serverUrl.trim()) {
+    try {
+      const parsed = new URL(raw.serverUrl.trim());
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+      if (!parsed.hostname) return null;
+      url = parsed.toString();
+    } catch {
+      return null;
+    }
+  }
   return { mediaDir: dir, serverUrl: url };
 }
 
@@ -310,7 +326,14 @@ async function startServer(mediaDir) {
   // host-settings.json and outranks this on every subsequent boot.
   if (mediaDir) env.FLIX_MEDIA_DIR = mediaDir;
 
-  serverProcess = fork(serverEntry, [], {
+  // Fork through server-shim.js when present (shipped by prepare-desktop):
+  // the shim exits when the IPC channel to this process closes, so a crashed/
+  // SIGKILLed Electron can never leave an orphan server holding flix.db open.
+  // will-quit below stays as the graceful path. Fallback: fork server.js
+  // directly (older packaged trees without the shim).
+  const shim = path.join(serverDir, "server-shim.js");
+  const [entry, args] = fs.existsSync(shim) ? [shim, [serverEntry]] : [serverEntry, []];
+  serverProcess = fork(entry, args, {
     cwd: serverDir,
     env,
     stdio: ["ignore", "inherit", "inherit", "ipc"],
@@ -359,13 +382,32 @@ function createWindow(url) {
   // (a poisoned link, a redirect) would otherwise run untrusted remote code in
   // the trusted app context next to the preload bridge.
   const expectedOrigin = (() => { try { return new URL(url).origin; } catch { return null; } })();
-  mainWindow.webContents.on("will-navigate", async (event, target) => {
+  const guardNavigation = (event, target) => {
     let sameOrigin = false;
     try { sameOrigin = expectedOrigin !== null && new URL(target).origin === expectedOrigin; } catch { sameOrigin = false; }
     if (!sameOrigin) {
       event.preventDefault();
       if (/^https?:/.test(target)) shell.openExternal(target);
     }
+  };
+  mainWindow.webContents.on("will-navigate", guardNavigation);
+  // A server-side 302 to another origin does NOT emit will-navigate — without
+  // this second guard a compromised/misconfigured remote server could redirect
+  // the trusted window (preload attached) anywhere.
+  mainWindow.webContents.on("will-redirect", guardNavigation);
+
+  // Remote mode has no waitForServer() probe, so an unreachable host or a typo
+  // used to render a silent white window forever. Show a local message and
+  // keep retrying — the SPA reloads as soon as the server answers.
+  mainWindow.webContents.on("did-fail-load", (_event, code, description, validatedUrl, isMainFrame) => {
+    if (!isMainFrame || !mainWindow) return;
+    if (code === -3) return; // ERR_ABORTED — a superseded navigation, not a failure
+
+    const safeUrl = String(validatedUrl || url).replace(/[<>"]/g, "");
+    mainWindow.loadURL(
+      `data:text/html;charset=utf-8,<body style="background:%23141414;color:%23fff;font-family:sans-serif;padding:2rem"><h2>Serveur Flix injoignable</h2><p style="color:%23aaa">${safeUrl}<br>(${description || code})</p><p>Nouvelle tentative dans 5 secondes…</p></body>`,
+    );
+    setTimeout(() => { if (mainWindow) mainWindow.loadURL(url); }, 5000);
   });
 
   // window.open()/target=_blank never creates a new Electron window; external
@@ -468,23 +510,32 @@ if (!singleInstance) {
     session.defaultSession.setPermissionCheckHandler(() => false);
 
     try {
-      const ffmpegOk = await checkFfmpeg();
-      if (!ffmpegOk) {
-        await showFfmpegMissing();
-        app.quit();
-        return;
-      }
-
       // First launch (or after "Changer le dossier vidéos…") asks for the
       // library folder; the saved choice is reused silently on every later
       // launch. Dev always runs against the local dev server (already started
       // separately via `npm run dev`).
       let cfg = isDev ? { mediaDir: null } : readSetup();
       if (!cfg) cfg = await runSetup();
+
+      // ffmpeg matters only when THIS machine runs the server (local mode/dev):
+      // in remote mode the transcoding happens server-side, so blocking on a
+      // missing local ffmpeg would lock the user out for nothing.
+      if (!cfg.serverUrl) {
+        const ffmpegOk = await checkFfmpeg();
+        if (!ffmpegOk) {
+          await showFfmpegMissing();
+          app.quit();
+          return;
+        }
+      }
+
       currentUrl = await boot(cfg);
       createWindow(currentUrl);
     } catch (error) {
       console.error("Failed to start Flix:", error);
+      // A packaged app launched from a menu has no stderr anyone can see —
+      // without a dialog every startup failure reads as "nothing happened".
+      dialog.showErrorBox("Flix n'a pas pu démarrer", error instanceof Error ? error.message : String(error));
       app.quit();
       return;
     }

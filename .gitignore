@@ -9,6 +9,8 @@ node_modules
 
 # desktop (electron) build output
 /dist-desktop/
+# pruned Electron-ABI server copy built by scripts/prepare-desktop.mjs
+/dist-electron-server/
 
 # deployable server bundle (scripts/prepare-standalone.mjs)
 /dist-standalone/
@@ -27,11 +29,13 @@ node_modules
 # *arr download/library tree (docker-compose.arr.yml: movies/, shows/, downloads/)
 /media/
 
-# secrets / signing material — never commit new ones. (The two deliberately
-# tracked keystores, android-native/app/flix.keystore and
-# android-native/tv/flix.keystore, are self-signed app keys kept in-repo on
-# purpose so debug/release signing stays stable across machines; this guards
-# against ANY other key/cert being added by accident.)
+# secrets / signing material — never commit any. The Android signing
+# keystores (android-native/{app,tv}/flix.keystore) are deliberately NOT in
+# the repo: they live on the build machine + CI secrets only, with an
+# out-of-repo backup — losing them breaks app-update continuity (users would
+# have to uninstall/reinstall), but publishing them would let anyone sign
+# "updates" of the app. Their passwords come from keystore.properties
+# (ignored below) or ANDROID_KEYSTORE_PWD/ANDROID_KEY_* env vars in CI.
 *.pem
 *.key
 *.jks
