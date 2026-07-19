@@ -1,7 +1,12 @@
 package local.flix.tv.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -17,7 +22,9 @@ import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import local.flix.core.image.NetworkImage
+import local.flix.core.model.CatalogItem
 import local.flix.core.net.FlixApi
+import local.flix.tv.ui.theme.LocalFlixTvColors
 
 @Composable
 fun TvImage(
@@ -30,6 +37,67 @@ fun TvImage(
 ) {
     NetworkImage(url = api.imageUrl(hash, width), client = api.client, modifier = modifier, contentScale = contentScale, fallback = fallback)
 }
+
+// --- metadata rendering -----------------------------------------------------
+
+/** A small pill (year, rating, runtime, genre…) laid over artwork or on a
+ *  detail panel. Deliberately low-contrast so a ROW of them doesn't fight the
+ *  title. */
+@Composable
+fun MetaChip(text: String, emphasized: Boolean = false) {
+    val colors = LocalFlixTvColors.current
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(if (emphasized) colors.accent else colors.chip)
+            .border(1.dp, if (emphasized) Color.Transparent else colors.chipBorder, RoundedCornerShape(4.dp))
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+    ) {
+        Text(text, color = if (emphasized) Color.White else colors.textMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/** Quality label from the stored max height + HDR flag (4K / 1080p / HDR). */
+fun qualityLabel(height: Int?, hdr: Boolean): String? {
+    val res = when {
+        height == null -> null
+        height >= 2000 -> "4K"
+        height >= 1400 -> "1440p"
+        height >= 1000 -> "1080p"
+        height >= 700 -> "720p"
+        else -> "SD"
+    }
+    return when {
+        res != null && hdr -> "$res · HDR"
+        res != null -> res
+        hdr -> "HDR"
+        else -> null
+    }
+}
+
+/** "2 h 14" / "48 min" from a runtime in seconds (movies only). */
+fun formatRuntime(seconds: Double): String? {
+    if (seconds <= 0) return null
+    val totalMin = (seconds / 60).toInt()
+    val h = totalMin / 60
+    val m = totalMin % 60
+    return if (h > 0) "${h} h ${m.toString().padStart(2, '0')}" else "$m min"
+}
+
+/** The compact "year · rating · quality · runtime/seasons" line shared by the
+ *  billboard and the detail header. */
+fun metaLine(item: CatalogItem): List<String> = buildList {
+    item.year?.let { add(it.toString()) }
+    if (item.isMovie) {
+        formatRuntime(item.duration)?.let { add(it) }
+    } else {
+        item.seasonCount?.let { add(if (it > 1) "$it saisons" else "1 saison") }
+    }
+    qualityLabel(item.qualityHeight, item.qualityHdr)?.let { add(it) }
+    item.contentRating?.let { add(it) }
+}
+
+// --- profile avatar ---------------------------------------------------------
 
 private val AVATAR_GRADIENTS: Map<String, Pair<Color, Color>> = mapOf(
     "red" to (Color(0xFFE50914) to Color(0xFF7A0509)),
@@ -56,12 +124,20 @@ fun TvAvatar(preset: String?, name: String, size: Int, onClick: (() -> Unit)? = 
     if (onClick != null) {
         Surface(
             onClick = onClick,
-            shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape((size * 0.12f).dp)),
+            shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape((size * 0.14f).dp)),
             colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color.Transparent),
             scale = ClickableSurfaceDefaults.scale(focusedScale = 1.12f),
-            border = ClickableSurfaceDefaults.border(focusedBorder = androidx.tv.material3.Border(androidx.compose.foundation.BorderStroke(3.dp, Color.White), shape = RoundedCornerShape((size * 0.12f).dp))),
+            border = ClickableSurfaceDefaults.border(focusedBorder = androidx.tv.material3.Border(BorderStroke(3.dp, Color.White), shape = RoundedCornerShape((size * 0.14f).dp))),
         ) { content() }
     } else {
-        Box(Modifier.clip(RoundedCornerShape((size * 0.12f).dp))) { content() }
+        Box(Modifier.clip(RoundedCornerShape((size * 0.14f).dp))) { content() }
+    }
+}
+
+/** Row of metadata chips, dot-separated for the billboard/detail panels. */
+@Composable
+fun MetaRow(parts: List<String>) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        parts.forEach { MetaChip(it) }
     }
 }

@@ -1,5 +1,6 @@
 package local.flix.tv.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,12 +23,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.tv.material3.Border
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.ClickableSurfaceDefaults
@@ -40,17 +43,19 @@ import local.flix.core.model.flattenEpisodes
 import local.flix.core.model.nextUpEpisode
 import local.flix.tv.ui.TvUiState
 import local.flix.tv.ui.TvViewModel
+import local.flix.tv.ui.components.MetaChip
 import local.flix.tv.ui.components.TvImage
+import local.flix.tv.ui.components.metaLine
 import local.flix.tv.ui.theme.LocalFlixTvColors
+
+private const val OVERSCAN = 48
 
 @Composable
 fun TvDetailScreen(vm: TvViewModel, ui: TvUiState, type: String, id: Int) {
     val colors = LocalFlixTvColors.current
     Box(Modifier.fillMaxSize().background(colors.background)) {
         if (type == "movie") {
-            ui.movieDetails[id]?.let { detail ->
-                TvMovieDetail(vm, detail.item, detail.files.firstOrNull()?.duration ?: 0.0)
-            }
+            ui.movieDetails[id]?.let { detail -> TvMovieDetail(vm, detail.item) }
         } else {
             ui.showDetails[id]?.let { detail -> TvShowDetail(vm, ui, detail) }
         }
@@ -60,22 +65,42 @@ fun TvDetailScreen(vm: TvViewModel, ui: TvUiState, type: String, id: Int) {
 @Composable
 private fun TvHeaderArt(vm: TvViewModel, item: CatalogItem, actions: @Composable () -> Unit) {
     val colors = LocalFlixTvColors.current
-    Box(Modifier.fillMaxWidth().height(460.dp)) {
-        TvImage(vm.api, item.backdropHash ?: item.posterHash, width = 1440, modifier = Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxSize().background(Color(0xFF1F1F1F)))
+    Box(Modifier.fillMaxWidth().height(480.dp)) {
+        TvImage(vm.api, item.backdropHash ?: item.posterHash ?: item.thumbHash, width = 1440, modifier = Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(colors.surface, colors.background))))
         }
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, 0.55f to colors.background.copy(alpha = 0.85f), 1f to colors.background)))
-        Row(Modifier.align(Alignment.BottomStart).padding(48.dp), verticalAlignment = Alignment.Bottom) {
-            Column(Modifier.width(700.dp)) {
-                Text(item.title, color = colors.text, fontSize = 34.sp, fontWeight = FontWeight.Black)
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    item.year?.let { Text(it.toString(), color = colors.textMuted, fontSize = 16.sp) }
-                    item.contentRating?.let { Text(it, color = colors.textMuted, fontSize = 16.sp) }
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to colors.background, 0.35f to colors.background.copy(alpha = 0.7f), 0.8f to Color.Transparent)))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, 0.5f to Color.Transparent, 1f to colors.background)))
+
+        Row(Modifier.align(Alignment.BottomStart).padding(OVERSCAN.dp), verticalAlignment = Alignment.Bottom) {
+            // The vertical poster ("cover") next to the details — the shape the
+            // user expects from a streaming app.
+            Box(Modifier.width(190.dp).height(285.dp).clip(RoundedCornerShape(10.dp))) {
+                TvImage(vm.api, item.posterHash ?: item.backdropHash, width = 480, modifier = Modifier.fillMaxSize()) {
+                    Box(Modifier.fillMaxSize().background(colors.surfaceFocused))
                 }
-                Spacer(Modifier.height(10.dp))
-                item.synopsis?.let { Text(it, color = colors.text, fontSize = 15.sp, maxLines = 3, overflow = TextOverflow.Ellipsis) }
-                Spacer(Modifier.height(18.dp))
+            }
+            Spacer(Modifier.width(28.dp))
+            Column(Modifier.width(720.dp)) {
+                val logo = item.logoHash
+                if (logo != null) {
+                    TvImage(vm.api, logo, width = 960, modifier = Modifier.fillMaxWidth(0.72f).height(90.dp), contentScale = androidx.compose.ui.layout.ContentScale.Fit) {
+                        Text(item.title, color = colors.text, fontSize = 38.sp, fontWeight = FontWeight.Black)
+                    }
+                } else {
+                    Text(item.title, color = colors.text, fontSize = 38.sp, fontWeight = FontWeight.Black, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { metaLine(item).forEach { MetaChip(it) } }
+                if (item.genres.isNotEmpty()) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(item.genres.take(4).joinToString("  •  "), color = colors.textFaint, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                }
+                item.synopsis?.let {
+                    Spacer(Modifier.height(12.dp))
+                    Text(it, color = colors.textMuted, fontSize = 15.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, lineHeight = 21.sp)
+                }
+                Spacer(Modifier.height(20.dp))
                 actions()
             }
         }
@@ -83,34 +108,44 @@ private fun TvHeaderArt(vm: TvViewModel, item: CatalogItem, actions: @Composable
 }
 
 @Composable
-private fun TvActionRow(vm: TvViewModel, type: String, id: Int, onPlay: () -> Unit) {
+private fun TvActionButton(label: String, primary: Boolean, onClick: () -> Unit) {
     val colors = LocalFlixTvColors.current
-    val inList = vm.isInMyList(type, id)
-    val rating = vm.ratingFor(type, id)
-    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        Surface(onClick = onPlay, colors = ClickableSurfaceDefaults.colors(containerColor = colors.text, focusedContainerColor = colors.accent), shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(4.dp))) {
-            Text("▶  Lecture", color = colors.background, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp))
-        }
-        Surface(
-            onClick = { vm.toggleMyList(type, id) },
-            colors = ClickableSurfaceDefaults.colors(containerColor = colors.surface, focusedContainerColor = colors.accent),
-            shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(4.dp)),
-        ) {
-            Text(if (inList) "✓ Ma liste" else "+ Ma liste", color = colors.text, fontSize = 16.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
-        }
-        Surface(
-            onClick = { vm.setRating(type, id, if (rating == 1 || rating == 2) 0 else 1) },
-            colors = ClickableSurfaceDefaults.colors(containerColor = colors.surface, focusedContainerColor = colors.accent),
-            shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(4.dp)),
-        ) {
-            Text(if (rating == 1 || rating == 2) "👍 Aimé" else "👍", color = colors.text, fontSize = 16.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
-        }
+    Surface(
+        onClick = onClick,
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (primary) colors.text else colors.chip,
+            focusedContainerColor = colors.accent,
+        ),
+        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(6.dp)),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
+    ) {
+        Text(
+            label,
+            color = if (primary) colors.background else colors.text,
+            fontWeight = FontWeight.Bold,
+            fontSize = 16.sp,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 13.dp),
+        )
     }
 }
 
 @Composable
-private fun TvMovieDetail(vm: TvViewModel, item: CatalogItem, duration: Double) {
-    TvHeaderArt(vm, item) { TvActionRow(vm, item.type, item.id) { vm.play(item.type, item.id) } }
+private fun TvActionRow(vm: TvViewModel, type: String, id: Int, playLabel: String, onPlay: () -> Unit) {
+    val inList = vm.isInMyList(type, id)
+    val rating = vm.ratingFor(type, id)
+    val liked = rating == 1 || rating == 2
+    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        TvActionButton("▶  $playLabel", primary = true, onClick = onPlay)
+        TvActionButton(if (inList) "✓  Ma liste" else "+  Ma liste", primary = false) { vm.toggleMyList(type, id) }
+        TvActionButton(if (liked) "👍  Aimé" else "👍", primary = false) { vm.setRating(type, id, if (liked) 0 else 1) }
+    }
+}
+
+@Composable
+private fun TvMovieDetail(vm: TvViewModel, item: CatalogItem) {
+    Column(Modifier.fillMaxSize()) {
+        TvHeaderArt(vm, item) { TvActionRow(vm, item.type, item.id, "Lecture") { vm.play(item.type, item.id) } }
+    }
 }
 
 @Composable
@@ -120,32 +155,37 @@ private fun TvShowDetail(vm: TvViewModel, ui: TvUiState, show: ShowDetail) {
     val nextUp = nextUpEpisode(show, ui.userState)
     val colors = LocalFlixTvColors.current
 
-    Column(Modifier.fillMaxSize()) {
-        TvHeaderArt(vm, show.item) {
-            TvActionRow(vm, "show", show.item.id) {
-                val ep = nextUp ?: show.flattenEpisodes().firstOrNull()
-                if (ep != null) vm.play("show", show.item.id, ep.id) else vm.play("show", show.item.id)
-            }
-        }
-        Row(Modifier.padding(horizontal = 48.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            show.seasons.forEach { s ->
-                val on = s.seasonNumber == selectedSeason
-                Surface(
-                    onClick = { selectedSeason = s.seasonNumber },
-                    colors = ClickableSurfaceDefaults.colors(containerColor = if (on) colors.text else colors.surface, focusedContainerColor = colors.accent),
-                    shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(4.dp)),
-                ) {
-                    Text(
-                        if (s.seasonNumber == 0) "Spéciaux" else "Saison ${s.seasonNumber}",
-                        color = if (on) colors.background else colors.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                    )
+    LazyColumn(Modifier.fillMaxSize()) {
+        item(key = "header") {
+            TvHeaderArt(vm, show.item) {
+                val playLabel = if (nextUp != null) "Reprendre" else "Lecture"
+                TvActionRow(vm, "show", show.item.id, playLabel) {
+                    val ep = nextUp ?: show.flattenEpisodes().firstOrNull()
+                    if (ep != null) vm.play("show", show.item.id, ep.id) else vm.play("show", show.item.id)
                 }
             }
         }
-        LazyColumn(Modifier.fillMaxWidth().padding(horizontal = 48.dp)) {
-            items(season?.episodes.orEmpty(), key = { it.id }) { ep -> TvEpisodeRow(vm, ui, show.item.id, ep) }
+        item(key = "seasons") {
+            Row(Modifier.padding(horizontal = OVERSCAN.dp, vertical = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                show.seasons.forEach { s ->
+                    val on = s.seasonNumber == selectedSeason
+                    Surface(
+                        onClick = { selectedSeason = s.seasonNumber },
+                        colors = ClickableSurfaceDefaults.colors(containerColor = if (on) colors.text else colors.chip, focusedContainerColor = colors.accent),
+                        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(6.dp)),
+                        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
+                    ) {
+                        Text(
+                            if (s.seasonNumber == 0) "Spéciaux" else "Saison ${s.seasonNumber}",
+                            color = if (on) colors.background else colors.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                        )
+                    }
+                }
+            }
         }
+        items(season?.episodes.orEmpty(), key = { it.id }) { ep -> TvEpisodeRow(vm, ui, show.item.id, ep) }
+        item(key = "tail") { Spacer(Modifier.height(OVERSCAN.dp)) }
     }
 }
 
@@ -155,25 +195,29 @@ private fun TvEpisodeRow(vm: TvViewModel, ui: TvUiState, showId: Int, ep: Episod
     val progress = ui.userState.progress.firstOrNull { it.itemType == "episode" && it.itemId == ep.id }
     Card(
         onClick = { vm.play("show", showId, ep.id, ((progress?.position ?: 0.0) * 1000).toLong()) },
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        shape = CardDefaults.shape(shape = RoundedCornerShape(4.dp)),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = OVERSCAN.dp, vertical = 5.dp),
+        shape = CardDefaults.shape(shape = RoundedCornerShape(8.dp)),
+        border = CardDefaults.border(focusedBorder = Border(BorderStroke(2.dp, Color.White), shape = RoundedCornerShape(8.dp))),
         colors = CardDefaults.colors(containerColor = colors.surface, focusedContainerColor = colors.surfaceFocused),
     ) {
-        Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.width(180.dp).aspectRatio(16f / 9f)) {
+        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(200.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(6.dp))) {
                 TvImage(vm.api, ep.thumbHash, width = 480, modifier = Modifier.fillMaxSize()) {
                     Box(Modifier.fillMaxSize().background(colors.surfaceFocused))
                 }
                 if (progress != null && progress.ratio > 0.02) {
-                    Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = 0.3f))) {
+                    Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color.Black.copy(alpha = 0.4f))) {
                         Box(Modifier.fillMaxWidth(progress.ratio.toFloat()).height(3.dp).background(colors.accent))
                     }
                 }
             }
-            Spacer(Modifier.width(16.dp))
+            Spacer(Modifier.width(18.dp))
             Column(Modifier.fillMaxWidth()) {
-                Text("${ep.episodeNumber}. ${ep.title ?: "Épisode ${ep.episodeNumber}"}", color = colors.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                ep.synopsis?.let { Text(it, color = colors.textMuted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                Text("${ep.episodeNumber}. ${ep.title ?: "Épisode ${ep.episodeNumber}"}", color = colors.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                ep.synopsis?.let {
+                    Spacer(Modifier.height(4.dp))
+                    Text(it, color = colors.textMuted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 18.sp)
+                }
             }
         }
     }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -58,9 +59,9 @@ private fun TvMainContent(vm: TvViewModel, ui: TvUiState) {
 private fun TvLoading() {
     val colors = LocalFlixTvColors.current
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        CircularProgressIndicator(color = colors.accent)
-        Spacer(Modifier.height(16.dp))
-        Text("FLIX", color = colors.text, fontSize = 26.sp, fontWeight = FontWeight.Black)
+        Text("FLIX", color = colors.accent, fontSize = 48.sp, fontWeight = FontWeight.Black)
+        Spacer(Modifier.height(24.dp))
+        CircularProgressIndicator(color = colors.accent, modifier = Modifier.size(38.dp))
     }
 }
 
@@ -68,12 +69,17 @@ private fun TvLoading() {
 private fun TvError(message: String?, onRetry: () -> Unit) {
     val colors = LocalFlixTvColors.current
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("Connexion impossible", color = colors.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(10.dp))
+        Text("Connexion impossible", color = colors.text, fontSize = 26.sp, fontWeight = FontWeight.Black)
+        Spacer(Modifier.height(12.dp))
         Text(message ?: "Le serveur est injoignable.", color = colors.textMuted, fontSize = 16.sp)
-        Spacer(Modifier.height(20.dp))
-        androidx.tv.material3.Surface(onClick = onRetry) {
-            Text("Réessayer", modifier = Modifier, color = colors.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(28.dp))
+        androidx.tv.material3.Surface(
+            onClick = onRetry,
+            colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(containerColor = colors.chip, focusedContainerColor = colors.accent),
+            shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp)),
+            scale = androidx.tv.material3.ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
+        ) {
+            Text("Réessayer", color = colors.text, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp))
         }
     }
 }
