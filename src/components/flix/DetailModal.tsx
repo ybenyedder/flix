@@ -100,6 +100,30 @@ function DetailModalContent({ target }: { target: DetailTarget }) {
   // A11y: lock body scroll behind the modal, move focus onto the close
   // button, and hand it back to the triggering element once the modal closes.
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // aria-modal alone doesn't trap anything: Tab happily walked out of the
+  // dialog into the visually-hidden page behind it. Cycle Tab/Shift+Tab over
+  // the dialog's focusable elements — the native <dialog> behaviour,
+  // hand-rolled because this modal predates useable ::backdrop styling.
+  const trapFocus = (e: React.KeyboardEvent) => {
+    if (e.key !== "Tab") return;
+    const root = dialogRef.current;
+    if (!root) return;
+    const focusables = Array.from(root.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')).filter(
+      (el) => !el.hasAttribute("disabled") && el.offsetParent !== null,
+    );
+    if (!focusables.length) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    const active = document.activeElement;
+    if (e.shiftKey && (active === first || !root.contains(active))) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
   // A dismiss must be a full press ON the backdrop: pointerdown memorised
   // here, re-checked on click — so clicking the modal's scrollbar or dragging
   // from the content out to the backdrop doesn't close the modal.
@@ -132,11 +156,13 @@ function DetailModalContent({ target }: { target: DetailTarget }) {
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={detail?.title ?? "Fiche du titre"}
         className="relative mx-auto max-w-4xl overflow-hidden rounded-dialog bg-surface shadow-pop ring-1 ring-white/10 animate-scale-in"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={trapFocus}
       >
         <button
           ref={closeButtonRef}
