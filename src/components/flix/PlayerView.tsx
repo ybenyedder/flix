@@ -449,15 +449,26 @@ function PlayerSession({ initial }: { initial: PlaybackRequest }) {
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    let raf = 0;
     const apply = () => {
       const active = activeTextSubtitle ? (textTrackRef.current?.track ?? null) : null;
       for (let i = 0; i < video.textTracks.length; i++) {
         video.textTracks[i].mode = video.textTracks[i] === active ? "showing" : "disabled";
       }
+      // Force the element's own track directly too, and retry next frame if it
+      // hasn't registered in video.textTracks yet: a <track> added MID-playback
+      // registers asynchronously in some browsers, and `default` only applies
+      // at initial parse — so without this a subtitle picked from the menu
+      // silently stays "disabled" and never renders.
+      if (active) active.mode = "showing";
+      else if (activeTextSubtitle) raf = requestAnimationFrame(apply);
     };
     apply();
     video.addEventListener("loadedmetadata", apply);
-    return () => video.removeEventListener("loadedmetadata", apply);
+    return () => {
+      video.removeEventListener("loadedmetadata", apply);
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, [activeTextSubtitle]);
 
   // --- progress + watch-event persistence ---
@@ -841,7 +852,20 @@ function PlayerSession({ initial }: { initial: PlaybackRequest }) {
     <div ref={containerRef} className="fixed inset-0 z-[100] bg-black">
       <video ref={videoRef} className="h-full w-full" playsInline onClick={handleVideoClick}>
         {activeTextSubtitle && (
-          <track ref={textTrackRef} key={activeTextSubtitle.id} kind="subtitles" default src={`/api/subs/${activeTextSubtitle.id}`} srcLang={activeTextSubtitle.language ?? undefined} label={activeTextSubtitle.title ?? activeTextSubtitle.language ?? "Sous-titres"} />
+          <track
+            ref={textTrackRef}
+            key={activeTextSubtitle.id}
+            kind="subtitles"
+            default
+            src={`/api/subs/${activeTextSubtitle.id}`}
+            srcLang={activeTextSubtitle.language ?? undefined}
+            label={activeTextSubtitle.title ?? activeTextSubtitle.language ?? "Sous-titres"}
+            // Belt-and-suspenders with the mode-forcing effect: once the cue
+            // file has loaded, make sure this track is the one showing.
+            onLoad={() => {
+              if (textTrackRef.current?.track) textTrackRef.current.track.mode = "showing";
+            }}
+          />
         )}
       </video>
 

@@ -1,9 +1,10 @@
 "use client";
 
-// The workhorse catalogue card: a 16:9 thumbnail that, on a sustained hover
-// (500ms, matching real Netflix), grows into a small info panel rendered via
-// a portal so it can escape the row's horizontal-scroll clipping. Recently
-// added, never-watched titles wear a small « Nouveau » badge.
+// The workhorse catalogue card: a 2:3 poster ("cover") with the title always
+// shown beneath it, that on a sustained hover (500ms, matching real Netflix)
+// grows into a small LANDSCAPE info panel rendered via a portal so it can
+// escape the row's horizontal-scroll clipping. Recently added, never-watched
+// titles wear a small « Nouveau » badge.
 
 import { memo, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
@@ -21,10 +22,28 @@ import { useRecoStore } from "@/store/reco";
 const HOVER_DELAY_MS = 500;
 const OVERLAY_SCALE = 1.4;
 
-function cardImage(item: CatalogEntry): string | null {
+// The tile is a vertical "cover": prefer the real 2:3 poster, then fall back
+// to a cropped backdrop/thumb.
+function posterImage(item: CatalogEntry): string | null {
+  if (item.posterHash) return item.posterHash;
+  if (item.backdropHash) return item.backdropHash;
+  return (item.type === "movie" ? item.thumbHash : null) ?? null;
+}
+
+// The hover overlay is a LANDSCAPE preview (like a mini trailer frame), so it
+// prefers the backdrop.
+function landscapeImage(item: CatalogEntry): string | null {
   if (item.backdropHash) return item.backdropHash;
   if (item.type === "movie" && item.thumbHash) return item.thumbHash;
   return item.posterHash ?? null;
+}
+
+function metaParts(item: CatalogEntry): string {
+  const parts: string[] = [];
+  if (item.year) parts.push(String(item.year));
+  if (item.type === "movie") parts.push(formatDuration(item.duration));
+  else if (item.seasonCount) parts.push(`${item.seasonCount} saison${item.seasonCount > 1 ? "s" : ""}`);
+  return parts.join(" · ");
 }
 
 function CardBase({ item }: { item: CatalogEntry }) {
@@ -99,8 +118,10 @@ function CardBase({ item }: { item: CatalogEntry }) {
     return () => window.removeEventListener("scroll", onScroll, { capture: true });
   }, [expanded]);
 
-  const image = cardImage(item);
+  const image = posterImage(item);
   const imageUrl = image ? api.imageUrl(image, 480) : null;
+  const label = qualityLabel(item.quality.height);
+  const meta = metaParts(item);
 
   return (
     <div
@@ -112,17 +133,23 @@ function CardBase({ item }: { item: CatalogEntry }) {
       onKeyDown={onKeyDown}
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
-      className="relative w-full cursor-pointer transition duration-200 ease-out-quart hover:-translate-y-1 hover:shadow-lift hover:ring-white/15"
+      className="group relative w-full cursor-pointer transition duration-200 ease-out-quart hover:-translate-y-1"
     >
-      <div className="relative aspect-video overflow-hidden rounded-card bg-surface ring-1 ring-white/5">
+      <div className="relative aspect-[2/3] overflow-hidden rounded-card bg-surface ring-1 ring-white/5 transition-shadow duration-200 group-hover:shadow-lift group-hover:ring-2 group-hover:ring-white/25">
         {imageUrl ? (
-          <Image src={imageUrl} alt={item.title} fill sizes="(max-width: 768px) 45vw, 20vw" className="object-cover" />
+          <Image src={imageUrl} alt={item.title} fill sizes="(max-width: 768px) 30vw, 14vw" className="object-cover" />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-surface-hover to-surface p-2 text-center text-sm font-semibold text-muted">
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-surface-hover to-surface p-3 text-center text-sm font-semibold text-muted">
             {item.title}
           </div>
         )}
-        {showNewBadge && <span className="absolute left-1 top-1 rounded-full bg-accent px-1.5 py-px text-[10px] font-bold text-white">Nouveau</span>}
+        {showNewBadge && <span className="absolute left-1.5 top-1.5 rounded bg-accent px-1.5 py-px text-[10px] font-bold text-white shadow">Nouveau</span>}
+        {label && <span className="absolute right-1.5 top-1.5 rounded bg-black/60 px-1.5 py-px text-[10px] font-bold text-white backdrop-blur-sm">{label}</span>}
+      </div>
+      {/* Title + meta ALWAYS visible under the cover (not only on hover). */}
+      <div className="mt-1.5 px-0.5">
+        <p className="line-clamp-1 text-[13px] font-semibold text-white">{item.title}</p>
+        {meta && <p className="line-clamp-1 text-[11px] text-muted/80">{meta}</p>}
       </div>
 
       {expanded &&
@@ -182,10 +209,12 @@ function CardOverlay({ item, rect, inMyList, rating, watched, match, onMouseEnte
   const width = rect.width * OVERLAY_SCALE;
   const maxLeft = typeof window !== "undefined" ? window.innerWidth - width - 8 : rect.left;
   const left = Math.min(Math.max(8, rect.left - (width - rect.width) / 2), Math.max(8, maxLeft));
-  const heightDelta = (rect.width * (9 / 16) * OVERLAY_SCALE - rect.width * (9 / 16)) / 2;
-  const top = rect.top - heightDelta;
+  // Anchor the LANDSCAPE preview near the top of the (taller) poster tile and
+  // let it grow downward — centering a 16:9 panel on a 2:3 tile would float it
+  // too high.
+  const top = Math.max(8, rect.top - 12);
 
-  const image = cardImage(item);
+  const image = landscapeImage(item);
   const imageUrl = image ? api.imageUrl(image, 480) : null;
   const label = qualityLabel(item.quality.height);
 

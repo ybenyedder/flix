@@ -322,3 +322,20 @@ button {
     scroll-behavior: auto !important;
   }
 }
+
+/* --- subtitle cues --------------------------------------------------------
+ * The native WebVTT renderer is used (a <track> on the <video>). Give cues a
+ * legible, cinema-style default: large, white, heavy, with a solid shadow so
+ * they stay readable over any frame — the browser default is often too small
+ * and low-contrast on a big screen. Positioned by the browser near the bottom;
+ * the player controls auto-hide, so they don't fight the cues during playback. */
+video::cue {
+  font-size: 1.15rem;
+  line-height: 1.35;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.9),
+    0 0 6px rgba(0, 0, 0, 0.7);
+}

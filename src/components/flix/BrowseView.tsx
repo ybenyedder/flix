@@ -144,7 +144,7 @@ function BrowseInner({ kind }: { kind: "movie" | "show" }) {
       {items.length === 0 ? (
         <p className="text-muted">{base.length === 0 ? "Aucun titre." : "Aucun titre ne correspond aux filtres."}</p>
       ) : (
-        <div className="stagger-children grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        <div className="stagger-children grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7">
           {items.map((item) => (
             <Card key={`${item.type}-${item.id}`} item={item} />
           ))}

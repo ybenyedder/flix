@@ -183,7 +183,13 @@ export function HomeView() {
       {billboard ? <BillboardHero item={billboard} /> : <div className="h-24" />}
       <div className="relative z-10 -mt-16 space-y-8 stagger-children md:-mt-24">
         {continueWatching.length > 0 && (
-          <Row title="Continuer à regarder" items={continueWatching} keyFor={(e) => `${e.itemType}-${e.itemId}`} renderItem={(entry) => <ContinueWatchingCard entry={entry} />} />
+          <Row
+            title="Continuer à regarder"
+            items={continueWatching}
+            keyFor={(e) => `${e.itemType}-${e.itemId}`}
+            itemClassName="w-[60vw] sm:w-[38vw] md:w-[26vw] lg:w-[20vw]"
+            renderItem={(entry) => <ContinueWatchingCard entry={entry} />}
+          />
         )}
         {myListItems.length > 0 && <Row title="Ma liste" items={myListItems} keyFor={keyOf} renderItem={(item) => <Card item={item} />} />}
 

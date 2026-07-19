@@ -12,7 +12,9 @@ export function Row<T>({
   items,
   keyFor,
   renderItem,
-  itemClassName = "w-[45vw] sm:w-[30vw] md:w-[19vw] lg:w-[15vw]",
+  // Default sizing suits the 2:3 POSTER cards (most rows). Rows of landscape
+  // cards (Continuer à regarder, Top 10) pass a wider itemClassName.
+  itemClassName = "w-[30vw] sm:w-[20vw] md:w-[14vw] lg:w-[11vw]",
 }: {
   title: string;
   items: T[];
