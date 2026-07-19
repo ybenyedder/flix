@@ -106,7 +106,7 @@ fun OnboardingScreen(connecting: Boolean, message: String?, initial: String, onC
 }
 
 @Composable
-fun ProfilesScreen(profiles: List<ProfileRef>, onSelect: (String) -> Unit) {
+fun ProfilesScreen(profiles: List<ProfileRef>, onSelect: (String) -> Unit, onChangeServer: (() -> Unit)? = null) {
     val colors = LocalFlixColors.current
     Box(Modifier.fillMaxSize().background(colors.background).systemBarsPadding()) {
         Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -114,6 +114,9 @@ fun ProfilesScreen(profiles: List<ProfileRef>, onSelect: (String) -> Unit) {
             Text("Qui regarde ?", fontSize = 28.sp, fontWeight = FontWeight.Medium, color = colors.text)
             Spacer(Modifier.height(36.dp))
             if (profiles.isEmpty()) {
+                // Wrong/moved server address lands here with an empty list —
+                // without an escape hatch the app is bricked until a data
+                // clear, hence the mandatory "Changer de serveur" link below.
                 Text("Aucun profil trouvé sur ce serveur.", color = colors.textMuted, fontSize = 14.sp)
             } else {
                 LazyVerticalGrid(columns = GridCells.Fixed(3), horizontalArrangement = Arrangement.spacedBy(18.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -125,6 +128,15 @@ fun ProfilesScreen(profiles: List<ProfileRef>, onSelect: (String) -> Unit) {
                         }
                     }
                 }
+            }
+            if (onChangeServer != null) {
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "Changer de serveur",
+                    color = colors.textMuted,
+                    fontSize = 13.sp,
+                    modifier = Modifier.clickable { onChangeServer() }.padding(12.dp),
+                )
             }
         }
     }

@@ -166,7 +166,9 @@ private fun EpisodeRow(vm: AppViewModel, ui: UiState, showId: Int, ep: EpisodeDe
     val colors = LocalFlixColors.current
     val progress = ui.userState.progress.firstOrNull { it.itemType == "episode" && it.itemId == ep.id }
     Row(
-        Modifier.fillMaxWidth().clickable { vm.play("show", showId, ep.id, ((progress?.position ?: 0.0) * 1000).toLong()) }
+        // takeIf !watched: replaying a finished episode restarts from 0 instead
+        // of "resuming" on its final millisecond (instant STATE_ENDED).
+        Modifier.fillMaxWidth().clickable { vm.play("show", showId, ep.id, ((progress?.takeIf { !it.watched }?.position ?: 0.0) * 1000).toLong()) }
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

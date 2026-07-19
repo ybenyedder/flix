@@ -65,6 +65,11 @@ class PlaybackService : MediaSessionService() {
                 /* handleAudioFocus = */ true,
             )
             .setHandleAudioBecomingNoisy(true)
+            // Actually take the wake/wifi locks the manifest declares: without
+            // this, a long buffering pause lets the device doze mid-stream.
+            // (Screen-on while VISIBLY playing is the PlayerView's job —
+            // keepScreenOn in both player screens.)
+            .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
 
         // Tapping the media notification brings whichever app hosts this

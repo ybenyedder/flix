@@ -131,9 +131,14 @@ class FlixApi {
             val req = authed(Request.Builder().url("$base/api/auth/status").get())
             client.newCall(req).execute().use { resp ->
                 val json = resp.body?.string()?.let { JSONObject(it) } ?: JSONObject()
-                if (json.optBoolean("authenticated", false)) AuthResult.from(json) else AuthResult.failure("Session expirée")
+                // The status route has NO "ok" key (only /api/auth/login sends
+                // one), so AuthResult.from() alone would parse ok=false and
+                // every cold boot would wrongly clear the stored session —
+                // "authenticated" IS this route's success signal.
+                if (json.optBoolean("authenticated", false)) AuthResult.from(json).copy(ok = true)
+                else AuthResult.failure("Session expirée")
             }
-        }.getOrElse { AuthResult.failure("Serveur injoignable") }
+        }.getOrElse { AuthResult.failure("Serveur injoignable", reachable = false) }
     }
 
     // ---- library / detail / search --------------------------------------------

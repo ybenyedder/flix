@@ -73,6 +73,12 @@ dependencies {
     // its Authorization-header interceptor) used for every other API call,
     // instead of a second raw java.net stack.
     implementation("androidx.media3:media3-exoplayer:$media3Ver")
+    // REQUIRED for every remux/transcode playback: the server answers those
+    // decisions with an HLS session, and DefaultMediaSourceFactory resolves
+    // HLS support by REFLECTION on hls.HlsMediaSource$Factory — without this
+    // artefact preparing an APPLICATION_M3U8 MediaItem throws
+    // "No suitable media source factory found" and the player black-screens.
+    implementation("androidx.media3:media3-exoplayer-hls:$media3Ver")
     implementation("androidx.media3:media3-session:$media3Ver")
     implementation("androidx.media3:media3-common:$media3Ver")
     implementation("androidx.media3:media3-datasource-okhttp:$media3Ver")

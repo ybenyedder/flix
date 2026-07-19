@@ -449,6 +449,10 @@ data class AuthResult(
     val avatar: String,
     val defaultPassword: Boolean,
     val error: String?,
+    /** false only when the server never answered (network error/timeout) —
+     *  lets boot() keep the stored session through a transient outage instead
+     *  of wiping it as if the server had rejected the token. */
+    val serverReachable: Boolean = true,
 ) {
     companion object {
         fun from(o: JSONObject, fallbackUsername: String? = null) = AuthResult(
@@ -461,7 +465,7 @@ data class AuthResult(
             defaultPassword = o.boolOr("defaultPassword", false),
             error = o.str("error"),
         )
-        fun failure(message: String) = AuthResult(false, null, null, false, false, "red", false, message)
+        fun failure(message: String, reachable: Boolean = true) = AuthResult(false, null, null, false, false, "red", false, message, reachable)
     }
 }
 

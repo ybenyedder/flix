@@ -111,11 +111,17 @@ fun TvOnboardingScreen(connecting: Boolean, message: String?, initial: String, o
 }
 
 @Composable
-fun TvProfilesScreen(profiles: List<ProfileRef>, onSelect: (String) -> Unit) {
+fun TvProfilesScreen(profiles: List<ProfileRef>, onSelect: (String) -> Unit, onChangeServer: (() -> Unit)? = null) {
     val colors = LocalFlixTvColors.current
     Column(Modifier.fillMaxSize().padding(64.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text("Qui regarde ?", color = colors.text, fontSize = 32.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
         Spacer(Modifier.height(36.dp))
+        if (profiles.isEmpty()) {
+            // Wrong/moved server address lands here with an empty list — the
+            // "Changer de serveur" button below is the only escape hatch short
+            // of clearing the app's data.
+            Text("Aucun profil trouvé sur ce serveur.", color = colors.textMuted, fontSize = 16.sp)
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
             profiles.forEach { p ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -123,6 +129,12 @@ fun TvProfilesScreen(profiles: List<ProfileRef>, onSelect: (String) -> Unit) {
                     Spacer(Modifier.height(10.dp))
                     Text(p.username, color = colors.textMuted, fontSize = 16.sp)
                 }
+            }
+        }
+        if (onChangeServer != null) {
+            Spacer(Modifier.height(40.dp))
+            androidx.tv.material3.Surface(onClick = onChangeServer) {
+                Text("Changer de serveur", color = colors.textMuted, fontSize = 15.sp, modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp))
             }
         }
     }

@@ -107,7 +107,14 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
                 prefs.setSession(status.token ?: p.token, status.username, status.avatar, status.isAdmin, status.isKids)
                 _ui.update { it.copy(username = status.username, avatar = status.avatar, isAdmin = status.isAdmin, isKids = status.isKids) }
                 loadHome()
+            } else if (!status.serverReachable) {
+                // Transient outage (NAS rebooting, new DHCP lease…) must NOT
+                // nuke the stored session — land on the connect screen so the
+                // user can retry or repoint the address, and keep the token
+                // for the next successful boot.
+                _ui.update { it.copy(phase = TvPhase.CONNECT, connecting = false, message = "Serveur injoignable. Vérifiez l'adresse et le réseau.") }
             } else {
+                // The SERVER rejected the token — only then is the session dead.
                 prefs.clearSession()
                 loadProfiles(p.serverBase)
             }
@@ -118,6 +125,14 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
         val base = rawBase.trim()
         if (base.isBlank()) return
         viewModelScope.launch {
+            // SECURITY: pointing at a (possibly new / untrusted) server must never
+            // leak the PREVIOUS host's session bearer. Drop it BEFORE the first
+            // request to the new base — otherwise the api.health() probe below
+            // would carry the old Authorization header to a host it doesn't belong
+            // to. Same guard as the mobile AppViewModel.connect().
+            api.setToken(null)
+            PlaybackAuth.token = null
+            prefs.clearSession()
             _ui.update { it.copy(connecting = true, message = null) }
             val ok = api.health(base)
             if (!ok) {
@@ -243,5 +258,13 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
 
     fun recordWatchEvent(itemType: String, itemId: Int, kind: String, ratio: Double, seconds: Double) {
         viewModelScope.launch { api.recordWatchEvent(itemType, itemId, kind, ratio, seconds) }
+    }
+
+    /** Server-side HLS session teardown, launched from the ViewModel scope: the
+     *  composable's rememberCoroutineScope is already cancelled inside
+     *  onDispose, so a launch{} there died before the DELETE was ever sent and
+     *  the server-side ffmpeg lived on until the idle reaper. */
+    fun endPlaySession(sessionId: String) {
+        viewModelScope.launch { api.endSession(sessionId) }
     }
 }

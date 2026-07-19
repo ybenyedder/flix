@@ -36,7 +36,7 @@ fun TvRoot(vm: TvViewModel) {
             when (ui.phase) {
                 TvPhase.BOOT, TvPhase.LOADING -> TvLoading()
                 TvPhase.CONNECT -> TvOnboardingScreen(ui.connecting, ui.message, ui.serverBase, vm::connect)
-                TvPhase.PROFILES -> TvProfilesScreen(ui.profiles, onSelect = vm::selectProfile)
+                TvPhase.PROFILES -> TvProfilesScreen(ui.profiles, onSelect = vm::selectProfile, onChangeServer = vm::changeServer)
                 TvPhase.LOGIN -> TvLoginScreen(ui.selectedProfile ?: "", ui.connecting, ui.message, vm::login, vm::backToProfiles)
                 TvPhase.HOME -> TvMainContent(vm, ui)
                 TvPhase.ERROR -> TvError(ui.message, vm::loadHome)

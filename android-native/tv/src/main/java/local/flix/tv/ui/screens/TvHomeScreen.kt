@@ -157,7 +157,10 @@ private fun TvMediaCard(vm: TvViewModel, ui: TvUiState, item: CatalogItem, progr
     val colors = LocalFlixTvColors.current
     Card(
         onClick = {
-            if (progress != null) vm.play(progress.topType, progress.topId, if (progress.itemType == "episode") progress.itemId else null, (progress.position * 1000).toLong())
+            // Only resume UNFINISHED progress — a watched row (position ==
+            // duration) would restart on the last millisecond and instantly
+            // fire STATE_ENDED + a bogus "complete" event. Watched → detail.
+            if (progress != null && !progress.watched) vm.play(progress.topType, progress.topId, if (progress.itemType == "episode") progress.itemId else null, (progress.position * 1000).toLong())
             else vm.openDetail(item.type, item.id)
         },
         modifier = modifier.width(220.dp).onFocusEvent { if (it) onFocus() },

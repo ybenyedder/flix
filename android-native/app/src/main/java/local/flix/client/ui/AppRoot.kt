@@ -41,7 +41,7 @@ fun AppRoot(vm: AppViewModel) {
             when (ui.phase) {
                 Phase.BOOT, Phase.LOADING -> LoadingScreen()
                 Phase.CONNECT -> OnboardingScreen(ui.connecting, ui.message, ui.serverBase, vm::connect)
-                Phase.PROFILES -> ProfilesScreen(ui.profiles, onSelect = vm::selectProfile)
+                Phase.PROFILES -> ProfilesScreen(ui.profiles, onSelect = vm::selectProfile, onChangeServer = vm::changeServer)
                 Phase.LOGIN -> LoginScreen(
                     username = ui.selectedProfile ?: "",
                     connecting = ui.connecting,

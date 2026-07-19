@@ -112,7 +112,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     it.copy(username = status.username, avatar = status.avatar, isAdmin = status.isAdmin, isKids = status.isKids)
                 }
                 loadHome()
+            } else if (!status.serverReachable) {
+                // Transient outage (NAS rebooting, new DHCP lease…) must NOT
+                // nuke the stored session — land on the connect screen so the
+                // user can retry or repoint the address, and keep the token
+                // for the next successful boot.
+                _ui.update { it.copy(phase = Phase.CONNECT, connecting = false, message = "Serveur injoignable. Vérifiez l'adresse et le réseau.") }
             } else {
+                // The SERVER rejected the token — only then is the session dead.
                 prefs.clearSession()
                 loadProfiles(p.serverBase)
             }
@@ -332,5 +339,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun recordWatchEvent(itemType: String, itemId: Int, kind: String, ratio: Double, seconds: Double) {
         viewModelScope.launch { api.recordWatchEvent(itemType, itemId, kind, ratio, seconds) }
+    }
+
+    /** Server-side HLS session teardown, launched from the ViewModel scope: the
+     *  composable's rememberCoroutineScope is already cancelled inside
+     *  onDispose, so a launch{} there died before the DELETE was ever sent and
+     *  the server-side ffmpeg lived on until the idle reaper. */
+    fun endPlaySession(sessionId: String) {
+        viewModelScope.launch { api.endSession(sessionId) }
     }
 }

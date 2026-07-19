@@ -164,22 +164,27 @@ fun TvPlayerScreen(vm: TvViewModel, ui: TvUiState, screen: TvScreen.Player) {
                 if (!advanced && ratio < 0.15 && posMs > 120_000) vm.recordWatchEvent(t.itemType, t.itemId, "abandon", ratio, posMs / 1000.0)
             }
             vm.player.stop()
-            activeSession?.let { s -> scope.launch { vm.api.endSession(s.sessionId) } }
+            activeSession?.let { s -> vm.endPlaySession(s.sessionId) }
         }
     }
 
     val snapshot by vm.player.snapshot.collectAsState()
+    // Runtime playback failures previously sat unread in the snapshot: frozen
+    // frame, no message. Share the setup-error overlay.
+    val shownError = error ?: snapshot.playerError
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
-            factory = { ctx -> PlayerView(ctx).apply { useController = false; layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT) } },
+            // keepScreenOn: media3 does not hold the screen — without it the TV
+            // screensaver/Daydream kicks in mid-playback.
+            factory = { ctx -> PlayerView(ctx).apply { useController = false; keepScreenOn = true; layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT) } },
             update = { view -> view.player = vm.player.currentPlayer },
         )
 
         if (loading) CircularProgressIndicator(color = colors.accent, modifier = Modifier.align(Alignment.Center))
 
-        error?.let { msg ->
+        shownError?.let { msg ->
             Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(msg, color = colors.text, fontSize = 18.sp)
                 Spacer(Modifier.height(14.dp))
@@ -189,7 +194,7 @@ fun TvPlayerScreen(vm: TvViewModel, ui: TvUiState, screen: TvScreen.Player) {
             }
         }
 
-        if (error == null && !loading) {
+        if (shownError == null && !loading) {
             Column(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.0f)).padding(48.dp)) {
                 Text(target?.title.orEmpty(), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))

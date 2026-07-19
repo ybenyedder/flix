@@ -192,7 +192,11 @@ private fun MediaCard(vm: AppViewModel, ui: UiState, item: CatalogItem, progress
     val match = ui.recommend.matchScores[item.key]
     Column(
         Modifier.width(148.dp).clickable {
-            if (progress != null) vm.play(progress.topType, progress.topId, if (progress.itemType == "episode") progress.itemId else null, (progress.position * 1000).toLong())
+            // Only resume UNFINISHED progress: a watched row has position ==
+            // duration server-side, so "resuming" it would start on the last
+            // millisecond, fire STATE_ENDED instantly and log a bogus
+            // "complete" watch event (plus auto-advance). Watched → detail.
+            if (progress != null && !progress.watched) vm.play(progress.topType, progress.topId, if (progress.itemType == "episode") progress.itemId else null, (progress.position * 1000).toLong())
             else vm.openDetail(item.type, item.id)
         },
     ) {

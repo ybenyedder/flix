@@ -223,11 +223,15 @@ fun PlayerScreen(vm: AppViewModel, ui: UiState, screen: Screen.Player) {
                 }
             }
             vm.player.stop()
-            activeSession?.let { s -> scope.launch { vm.api.endSession(s.sessionId) } }
+            activeSession?.let { s -> vm.endPlaySession(s.sessionId) }
         }
     }
 
     val snapshot by vm.player.snapshot.collectAsState()
+    // Setup failures (decision/session) and runtime playback failures (decode
+    // error, dead segment, expired HLS session) share the same overlay — the
+    // latter previously sat unread in the snapshot: frozen frame, no message.
+    val shownError = error ?: snapshot.playerError
 
     Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black).clickable(
         indication = null,
@@ -238,6 +242,10 @@ fun PlayerScreen(vm: AppViewModel, ui: UiState, screen: Screen.Player) {
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     useController = false
+                    // media3 does NOT hold the screen on by itself — without
+                    // this the display times out mid-film (audio keeps going
+                    // via the foreground service).
+                    keepScreenOn = true
                     layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                 }
             },
@@ -248,7 +256,7 @@ fun PlayerScreen(vm: AppViewModel, ui: UiState, screen: Screen.Player) {
             CircularProgressIndicator(color = androidx.compose.ui.graphics.Color.White, modifier = Modifier.align(Alignment.Center).size(40.dp))
         }
 
-        error?.let { msg ->
+        shownError?.let { msg ->
             Column(Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(msg, color = androidx.compose.ui.graphics.Color.White, fontSize = 14.sp)
                 Spacer(Modifier.size(12.dp))
@@ -256,7 +264,7 @@ fun PlayerScreen(vm: AppViewModel, ui: UiState, screen: Screen.Player) {
             }
         }
 
-        if (controlsVisible && error == null) {
+        if (controlsVisible && shownError == null) {
             PlayerControlsOverlay(
                 title = target?.title ?: "",
                 snapshot = snapshot,
