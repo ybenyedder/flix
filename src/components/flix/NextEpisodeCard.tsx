@@ -13,7 +13,7 @@ import type { EpisodeDetail } from "@/lib/flix/types";
 
 const COUNTDOWN_SECONDS = 10;
 
-export function NextEpisodeCard({ episode, onPlayNext, onDismiss }: { episode: EpisodeDetail; onPlayNext: () => void; onDismiss: () => void }) {
+export function NextEpisodeCard({ episode, playing, onPlayNext, onDismiss }: { episode: EpisodeDetail; playing: boolean; onPlayNext: () => void; onDismiss: () => void }) {
   const [remaining, setRemaining] = useState(COUNTDOWN_SECONDS);
 
   useEffect(() => {
@@ -21,13 +21,18 @@ export function NextEpisodeCard({ episode, onPlayNext, onDismiss }: { episode: E
       onPlayNext();
       return;
     }
+    // Freeze while paused or buffering: the countdown must follow the
+    // playback, not the wall clock — otherwise pausing on the credits to grab
+    // a drink still auto-starts the next episode 10s later (and, as séance
+    // host, drags the whole room along).
+    if (!playing) return;
     const id = window.setTimeout(() => setRemaining((r) => r - 1), 1000);
     return () => window.clearTimeout(id);
     // Countdown ticks off its own previous value only — onPlayNext is stable
     // enough per mount that re-running this on every parent render would just
     // restart the timer for no reason.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remaining]);
+  }, [remaining, playing]);
 
   const imageUrl = episode.thumbHash ? api.imageUrl(episode.thumbHash, 480) : null;
 

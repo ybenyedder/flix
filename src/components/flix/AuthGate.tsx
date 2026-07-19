@@ -10,6 +10,7 @@
 import { useEffect, type ReactNode } from "react";
 import { api } from "@/lib/flix/api";
 import { useProfileStore } from "@/store/profile";
+import { resetProfileScopedStores } from "@/store/resetProfileScoped";
 import { ProfileGate } from "./ProfileGate";
 
 export function AuthGate({ children }: { children: ReactNode }) {
@@ -22,7 +23,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, [checkStatus]);
 
   useEffect(() => {
-    api.onUnauthorized(() => useProfileStore.setState({ authenticated: false }));
+    api.onUnauthorized(() => {
+      // Same purge as the explicit logout: without it the NEXT profile to sign
+      // in inherits this one's open player (which then writes its resume
+      // position into the wrong account), detail modal, reco rows and state.
+      void resetProfileScopedStores();
+      useProfileStore.setState({ authenticated: false });
+    });
     return () => api.onUnauthorized(null);
   }, []);
 

@@ -1,11 +1,10 @@
 "use client";
 
-// Extracted verbatim from PlayerView — the controls-overlay auto-hide. Surfaces
-// the controls on mousemove/click and hides them after 3s of stillness while
-// playing (unless the track menu is open). The `reset` closure, the listeners,
-// the assignment to the shared `controlsResetRef` (read by stepVolume /
-// handleVideoClick in PlayerView, which keep the same ref object) and the
-// cleanup are byte-identical to the original effect.
+// Extracted from PlayerView — the controls-overlay auto-hide. Surfaces the
+// controls on mousemove/click/keydown and hides them after 3s of stillness
+// while playing (unless the track menu is open). The `reset` closure is shared
+// through `controlsResetRef` (read by stepVolume / handleVideoClick in
+// PlayerView, which keep the same ref object).
 //
 // Dependency array reproduces the original reactive deps `[playing,
 // showTrackMenu]` exactly; the only additions are the referentially-stable
@@ -47,9 +46,16 @@ export function useAutoHideControls({
     reset();
     container.addEventListener("mousemove", reset);
     container.addEventListener("click", reset);
+    // Keyboard users could never bring the controls back: only mouse activity
+    // reset the timer, and hiding unmounts the overlay (focus falls to body,
+    // so no control can be tabbed to either). Window-level to match the global
+    // player shortcuts (usePlayerKeyboard) — revealing the overlay on any key
+    // is harmless.
+    window.addEventListener("keydown", reset);
     return () => {
       container.removeEventListener("mousemove", reset);
       container.removeEventListener("click", reset);
+      window.removeEventListener("keydown", reset);
       if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
     };
   }, [playing, showTrackMenu, setShowControls, containerRef, hideTimerRef, controlsResetRef]);

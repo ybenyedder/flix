@@ -72,6 +72,7 @@ function ArrPromoBanner() {
 export function HomeView() {
   const { movies, shows } = useCatalog();
   const status = useLibraryStore((s) => s.status);
+  const libraryError = useLibraryStore((s) => s.error);
   const progress = useStateStore((s) => s.progress);
   const myList = useStateStore((s) => s.myList);
   const recoRows = useRecoStore((s) => s.rows);
@@ -141,6 +142,25 @@ export function HomeView() {
         <SkeletonHero />
         <SkeletonRow />
         <SkeletonRow />
+      </div>
+    );
+  }
+
+  // The store has carried a French error message since day one — this branch
+  // finally renders it. Only the FIRST load can land here (silent refreshes
+  // keep the previous catalogue on failure), so a retry button is enough.
+  if (status === "error") {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
+        <p className="text-lg font-semibold text-white">Bibliothèque indisponible</p>
+        <p className="text-sm text-muted">{libraryError ?? "Le serveur n'a pas répondu."}</p>
+        <button
+          type="button"
+          onClick={() => void useLibraryStore.getState().load()}
+          className="mt-2 rounded-field bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover"
+        >
+          Réessayer
+        </button>
       </div>
     );
   }

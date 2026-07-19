@@ -75,7 +75,12 @@ export const useStateStore = create<StateStore>((set, get) => ({
       const data = await api.get<StateSnapshot>("/api/state");
       set({ loaded: true, myList: data.myList, ratings: data.ratings, progress: data.progress });
     } catch {
-      set({ loaded: true, ...EMPTY });
+      // Keep whatever is already loaded: load() doubles as the rollback for
+      // every optimistic mutation AND the resync on player close, so wiping to
+      // EMPTY here made a transient network blip erase Ma liste / progress /
+      // watched marks from the whole UI until a later load succeeded. Profile
+      // switches don't need the wipe either — reset() handles those.
+      set({ loaded: true });
     }
   },
 

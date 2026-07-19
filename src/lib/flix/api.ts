@@ -68,7 +68,12 @@ export const api = {
       credentials: "include",
       cache: init.cache ?? "no-store",
     });
-    if (res.status === 401) {
+    // A 401 normally means the session died — drop the token and kick the app
+    // back to the profile picker. The login route is the one exception: its
+    // 401 is "wrong password", not "expired session", so it must fall through
+    // to the generic path below that surfaces the server's own error message
+    // (and must NOT fire unauthorizedHandler — nobody was signed in).
+    if (res.status === 401 && !path.startsWith("/api/auth/login")) {
       this.setToken(null);
       unauthorizedHandler?.();
       throw new ApiError(401, "Session expirée");

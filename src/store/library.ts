@@ -6,7 +6,8 @@
 // every profile — kids filtering happens client-side (useCatalog.ts).
 
 import { create } from "zustand";
-import { api } from "@/lib/flix/api";
+import { api, ApiError } from "@/lib/flix/api";
+import { useUiStore } from "./ui";
 import type { CatalogSnapshot, Movie, Show, ScanProgress } from "@/lib/flix/types";
 
 interface LibraryState {
@@ -120,7 +121,15 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   },
 
   rescan: async () => {
-    await api.post("/api/library/scan", {});
+    // Every caller fires this as `void rescan()` — an uncaught rejection here
+    // (scan already running -> 409, expired session…) was silent: no toast, no
+    // console, the button just did nothing. Surface the server's message.
+    try {
+      await api.post("/api/library/scan", {});
+    } catch (error) {
+      useUiStore.getState().notify(error instanceof ApiError ? error.message : "Analyse impossible — serveur injoignable");
+      return;
+    }
     get().watchScan();
   },
 }));

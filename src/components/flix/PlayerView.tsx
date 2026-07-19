@@ -919,7 +919,7 @@ function PlayerSession({ initial }: { initial: PlaybackRequest }) {
       )}
 
       {nextUpVisible && !nextUpDismissed && nextEpisode && !partyIsGuest && (
-        <NextEpisodeCard episode={nextEpisode} onPlayNext={() => void advanceToNext()} onDismiss={() => setNextUpDismissed(true)} />
+        <NextEpisodeCard episode={nextEpisode} playing={playing} onPlayNext={() => void advanceToNext()} onDismiss={() => setNextUpDismissed(true)} />
       )}
 
       {partyActive && <PartyOverlay showControls={showControls} />}

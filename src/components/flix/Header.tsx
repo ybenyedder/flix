@@ -13,12 +13,12 @@ import { useStateStore } from "@/store/state";
 import { useLibraryStore } from "@/store/library";
 import { useRecoStore } from "@/store/reco";
 import { usePlayerStore } from "@/store/player";
-import { useWatchPartyStore } from "@/store/watchParty";
+import { resetProfileScopedStores } from "@/store/resetProfileScoped";
 import { ProfileAvatar } from "./ProfileGate";
 import { WatchPartyMenu } from "./WatchPartyMenu";
 import { api, ApiError } from "@/lib/flix/api";
 import { AVATAR_PRESETS } from "@/lib/flix/avatar";
-import { useCatalog } from "@/lib/flix/useCatalog";
+import { filterForProfile } from "@/lib/flix/kids";
 import { buildSeenKeys, pickSurprise } from "@/lib/flix/rows";
 
 const NAV: { id: ViewId; label: string }[] = [
@@ -166,7 +166,6 @@ export function Header() {
   const searchQuery = useUiStore((s) => s.searchQuery);
   const setSearchQuery = useUiStore((s) => s.setSearchQuery);
   const notify = useUiStore((s) => s.notify);
-  const { movies, shows } = useCatalog();
 
   const username = useProfileStore((s) => s.username);
   const avatar = useProfileStore((s) => s.avatar);
@@ -212,13 +211,8 @@ export function Header() {
     // Reset every per-profile store, not just the personal state — otherwise
     // the next profile inherits the previous one's open player (and writes
     // ITS progress), detail modal, search, reco rows and live séance SSE.
-    await useWatchPartyStore.getState().leave();
-    usePlayerStore.getState().close();
-    useUiStore.getState().closeDetail();
-    useUiStore.getState().setSearchQuery("");
-    useUiStore.getState().navigate("home");
-    useRecoStore.getState().reset();
-    useStateStore.getState().reset();
+    // Shared with the 401 path (AuthGate) via resetProfileScopedStores.
+    await resetProfileScopedStores();
     await logout();
   };
 
@@ -239,7 +233,13 @@ export function Header() {
   // for a show, PlayerView resolves kind:"show" to its next-up episode itself,
   // so a plain open() is enough in both cases.
   const surpriseMe = () => {
-    const pick = pickSurprise(useRecoStore.getState().rows, [...movies, ...shows], buildSeenKeys(useStateStore.getState().progress));
+    // Catalogue read via getState() (house convention for callbacks): a
+    // useCatalog() subscription here re-rendered the entire Header on every
+    // silent catalogue refresh — frequent during an imaging pass — for data
+    // only this click handler consumes.
+    const { movies, shows } = useLibraryStore.getState();
+    const kidsFiltered = [...filterForProfile(movies, isKids), ...filterForProfile(shows, isKids)];
+    const pick = pickSurprise(useRecoStore.getState().rows, kidsFiltered, buildSeenKeys(useStateStore.getState().progress));
     if (!pick) {
       notify("Aucun titre à proposer");
       return;
