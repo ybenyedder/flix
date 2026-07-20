@@ -19,14 +19,14 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       # Node 22 like every other job (Dockerfile, server-bundle, egg yolk) —
       # the desktop server runs under ELECTRON_RUN_AS_NODE with an
       # Electron-rebuilt better-sqlite3, so 20 vs 22 had no ABI impact here,
       # but "all in sync" is the rule the comments below rely on.
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: 'npm'
@@ -61,18 +61,18 @@ jobs:
   # better-sqlite3 binding is ABI-locked to the build Node, and both the
   # Dockerfile runtime and the Pterodactyl egg's yolk run Node 22 — keep all
   # three in sync.
-  # Independent of the desktop job (the release is created up front by
-  # `gh release create`, so this can upload straight to it): a desktop-build
-  # failure must never block publishing the server bundle that the Docker/
-  # Pterodactyl deploys pull.
+  # Independent of the desktop job: a desktop-build failure must never block
+  # publishing the server bundle that the Docker/Pterodactyl deploys pull.
+  # The "Ensure the release exists" step below is what makes that independence
+  # real — nothing else guarantees the release exists when this job uploads.
   server-bundle:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
@@ -86,6 +86,16 @@ jobs:
           NEXT_TELEMETRY_DISABLED: "1"
       - name: Package standalone bundle
         run: node scripts/prepare-standalone.mjs --tar flix-standalone-linux-x64.tar.gz
+      # Create the release if nothing has yet: without this, a bare `gh release
+      # upload` races the (much slower) desktop job — electron-builder is what
+      # creates the release otherwise — and fails with "release not found"
+      # whenever this job wins, which is exactly the "desktop must never block
+      # the server bundle" failure this job exists to avoid. electron-builder
+      # attaches to an existing tag release, so creating it up front is safe.
+      - name: Ensure the release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || gh release create "${GITHUB_REF_NAME}" --verify-tag --generate-notes
       - name: Attach bundle to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -100,25 +110,25 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Compute image tags
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -143,12 +153,12 @@ jobs:
         working-directory: android-native
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
         with:
           distribution: temurin
           java-version: 21
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
       # The signing keystore is deliberately NOT in the repo (see .gitignore):
       # CI receives it as a base64 repo secret and materialises it for both
       # modules (app and tv share the same key). Fail fast with a clear error
