@@ -205,6 +205,46 @@ test("a .srt and a poster dropped AFTER indexation are picked up on the next sca
   db.prepare("DELETE FROM subtitles WHERE id = ?").run(legacyId);
 });
 
+test("an in-place .srt edit (directory mtime untouched) re-converts the cached VTT on the next scan", async () => {
+  const { runScan } = await import("../src/server/library/scanner");
+  const { getVttForSubtitle } = await import("../src/server/playback/subtitles");
+  const { getDb } = await import("../src/server/db");
+  const db = getDb();
+
+  const movieDir = path.join(tmpMedia, "Sidecar Movie (2019)");
+  const srt = path.join(movieDir, "Sidecar Movie (2019).fr.srt");
+  const fileRow = db.prepare("SELECT id FROM media_files WHERE filepath = ?").get("Sidecar Movie (2019)/Sidecar Movie (2019).mkv") as {
+    id: number;
+  };
+  const before = db.prepare("SELECT id FROM subtitles WHERE media_file_id = ? AND source = 'external'").get(fileRow.id) as { id: number };
+  // Warm the VTT cache — a missed refresh would keep serving these bytes.
+  const warmed = await getVttForSubtitle(before.id);
+  assert.ok(warmed);
+  assert.match(warmed.content, /Bonjour/);
+
+  // Edit IN PLACE: the .srt's mtime moves but the directory's does not (POSIX
+  // only bumps a dir on entry create/delete/rename). Pin the dir mtime to the
+  // PAST explicitly so the old directory-mtime path cannot trigger the refresh
+  // — only the walk's folded subtitle-file mtime can.
+  fs.writeFileSync(srt, "1\n00:00:01,000 --> 00:00:02,000\nBonsoir\n");
+  const future = new Date(Date.now() + 5000);
+  fs.utimesSync(srt, future, future);
+  const past = new Date(Date.now() - 3600_000);
+  fs.utimesSync(movieDir, past, past);
+
+  const scan = await runScan();
+  assert.equal(scan.status, "ready");
+
+  const after = db.prepare("SELECT id FROM subtitles WHERE media_file_id = ? AND source = 'external'").get(fileRow.id) as
+    | { id: number }
+    | undefined;
+  assert.ok(after, "the sidecar row must survive the rescan");
+  assert.notEqual(after.id, before.id, "the refresh must re-create the row — the new id busts the server VTT cache AND the browser's immutable cache");
+  const vtt = await getVttForSubtitle(after.id);
+  assert.ok(vtt);
+  assert.match(vtt.content, /Bonsoir/, "the edited subtitle text must be served, not the stale cached VTT");
+});
+
 // ---------------------------------------------------------------------------
 // Fix: FTS anti-join completion
 // ---------------------------------------------------------------------------

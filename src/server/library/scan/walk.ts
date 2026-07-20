@@ -9,12 +9,14 @@ import path from "path";
 import { getConfig } from "../../config";
 import { createLogger } from "../../logger";
 import { VIDEO_EXTENSIONS as VIDEO_EXTENSION_LIST } from "@/lib/flix/videoFormats";
+import { SUB_FILE_EXTENSIONS } from "../sidecarSubs";
 
 const log = createLogger("scanner");
 
 // The playable-container allowlist lives in one place (videoFormats.ts, shared
 // with the path guard and the upload manager); build a Set here for O(1) lookup.
 const VIDEO_EXTENSIONS = new Set(VIDEO_EXTENSION_LIST);
+const SUB_EXTENSIONS = new Set(SUB_FILE_EXTENSIONS);
 const SAMPLE_RE = /\bsample\b/i;
 
 export interface WalkedVideo {
@@ -34,9 +36,11 @@ export interface WalkResult {
   walkErrors: number;
   /** The walk stopped at maxScanFiles — unvisited files must not be pruned. */
   truncated: boolean;
-  /** mtime (ms) of every directory visited, keyed by posix relative path ("" =
-   *  root) — lets the sidecar refresh detect "a file was dropped in here since
-   *  the last scan" without a second stat pass. */
+  /** Directory freshness (ms), keyed by posix relative path ("" = root): the
+   *  max of the directory's own mtime and every subtitle sidecar file's mtime
+   *  inside it — lets the sidecar refresh detect both "a file was dropped in
+   *  here since the last scan" AND "an existing .srt was edited in place"
+   *  (which does NOT touch the parent directory's mtime) in one pass. */
   dirMtimes: Map<string, number>;
 }
 
@@ -124,7 +128,23 @@ export async function walk(root: string): Promise<WalkResult> {
         continue;
       }
       if (!isFile) continue;
-      if (!VIDEO_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) continue;
+      const ext = path.extname(entry.name).toLowerCase();
+      if (SUB_EXTENSIONS.has(ext)) {
+        // Fold subtitle-file mtimes into the directory freshness map (see the
+        // WalkResult doc): an in-place .srt edit is otherwise invisible — the
+        // video's size/mtime and the directory's mtime all stay unchanged, so
+        // the sidecar refresh would never re-convert the cached VTT. Subtitle
+        // files are rare, so the extra stat is negligible.
+        try {
+          const key = dirParts.join("/");
+          const mtime = Math.floor((linkStat ?? (await fs.promises.stat(abs))).mtimeMs);
+          if (mtime > (dirMtimes.get(key) ?? 0)) dirMtimes.set(key, mtime);
+        } catch {
+          // vanished/unreadable sidecar hides no videos — not a walk error
+        }
+        continue;
+      }
+      if (!VIDEO_EXTENSIONS.has(ext)) continue;
       if (SAMPLE_RE.test(entry.name)) continue;
       // Same containment policy as directories: a symlinked video whose real
       // location escapes the root would be unplayable — don't index it.

@@ -31,7 +31,9 @@ export interface InitInput {
   filename: string;
   size: number;
   destination: UploadDestination;
-  conflict?: "fail" | "rename";
+  // Must mirror the server's InitOptions (src/server/upload/manager.ts) — any
+  // other value is coerced to undefined by the route and behaves like "reject".
+  conflict?: "reject" | "rename";
 }
 
 export interface InitResponse {

@@ -19,6 +19,13 @@ const SUB_EXTENSIONS: Record<string, SidecarFormat> = {
  *  one of these folders bumps THAT folder's mtime, not the video's parent. */
 export const SIDECAR_DIR_NAMES = ["Subs", "subs", "Subtitles", "subtitles"];
 
+/** Exported for the walk phase: editing a subtitle IN PLACE changes the file's
+ *  mtime but not its parent directory's (POSIX only bumps a dir's mtime on
+ *  entry create/delete/rename), so the walk folds sub-file mtimes into its
+ *  per-directory freshness map — without this, an edited .srt would keep
+ *  serving its stale cached VTT forever. */
+export const SUB_FILE_EXTENSIONS = Object.keys(SUB_EXTENSIONS);
+
 export interface SidecarSubtitle {
   path: string; // absolute
   language: string | null;

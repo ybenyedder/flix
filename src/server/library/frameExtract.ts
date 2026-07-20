@@ -99,19 +99,21 @@ export function buildFrameFilter(opts: FrameFilterOptions): string {
 
 // --- low-level ffmpeg frame grab --------------------------------------------
 
-// "Binary not found" latch (spawn ENOENT), mirroring ffprobe.ts: the images
-// pass checks this after a file yields nothing so it can leave images_at = 0
-// (retry next scan) instead of stamping the file done while ffmpeg was simply
-// missing (mistyped FFMPEG_PATH at first boot). Reset at the start of a pass.
-let spawnEnoent = false;
-export function ffmpegWasMissing(): boolean {
-  return spawnEnoent;
-}
-export function resetFfmpegMissing(): void {
-  spawnEnoent = false;
+// "Binary not found" counter (spawn ENOENT), mirroring ffprobe.ts: the images
+// pass snapshots it before each file and leaves images_at = 0 (retry next
+// scan) only when it grew DURING that file, instead of stamping the file done
+// while ffmpeg was simply missing (mistyped FFMPEG_PATH at first boot). A
+// counter, not a pass-wide boolean latch: the latch also unstamped every file
+// AFTER the first ENOENT — including sidecar-only files that never touch
+// ffmpeg — so the pending set never drained and every scan replayed a full
+// imaging pass for as long as ffmpeg stayed missing. Monotonic, never reset:
+// consumers compare before/after, so a fixed FFMPEG_PATH heals on its own.
+let spawnEnoentCount = 0;
+export function ffmpegMissingCount(): number {
+  return spawnEnoentCount;
 }
 function noteSpawnError(error: unknown): void {
-  if ((error as NodeJS.ErrnoException)?.code === "ENOENT") spawnEnoent = true;
+  if ((error as NodeJS.ErrnoException)?.code === "ENOENT") spawnEnoentCount++;
 }
 
 function runFfmpeg(args: string[]): Promise<Buffer | null> {

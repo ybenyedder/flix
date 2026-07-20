@@ -84,32 +84,48 @@ export function buildAggregates(userId: number, catalog: Map<string, ItemRow>): 
     for (const g of item.genres) genreSigned.set(g, (genreSigned.get(g) ?? 0) + signed);
   };
 
-  // Unwindowed on purpose: "seen" and "last completed at" must never expire
-  // just because a signal's WEIGHT has decayed away — only the weight
-  // contribution below is bounded by EVENTS_WINDOW_MS.
-  const events = db
-    .prepare("SELECT item_type, top_type, top_id, kind, ratio, created_at FROM watch_events WHERE user_id = ? ORDER BY created_at ASC")
-    .all(userId) as WatchEventRow[];
-
+  // "seen", "last completed at" and binge detection are unwindowed on purpose
+  // (a signal's exclusion-relevance must never expire just because its weight
+  // has decayed away) — but they only need compact aggregates, computed here
+  // by SQLite under idx_watch_user_time instead of materialising the user's
+  // entire event history in JS. Only the weight fold below needs per-event
+  // rows, and those ARE bounded by EVENTS_WINDOW_MS.
   const seen = new Set<string>();
+  for (const r of db.prepare("SELECT DISTINCT top_type, top_id FROM watch_events WHERE user_id = ?").all(userId) as {
+    top_type: string;
+    top_id: number;
+  }[]) {
+    seen.add(`${r.top_type}:${r.top_id}`);
+  }
+
   const lastCompleteAt = new Map<string, number>();
+  for (const r of db
+    .prepare("SELECT top_type, top_id, MAX(created_at) AS ts FROM watch_events WHERE user_id = ? AND kind = 'complete' GROUP BY top_type, top_id")
+    .all(userId) as { top_type: string; top_id: number; ts: number }[]) {
+    lastCompleteAt.set(`${r.top_type}:${r.top_id}`, r.ts);
+  }
+
+  // Full-history too: an old binge still multiplies whatever recent weight the
+  // show has (windowing this would silently change scores for long histories).
   const episodeCompletesByShow = new Map<number, number[]>();
+  for (const r of db
+    .prepare("SELECT top_id, created_at FROM watch_events WHERE user_id = ? AND kind = 'complete' AND item_type = 'episode' AND top_type = 'show'")
+    .all(userId) as { top_id: number; created_at: number }[]) {
+    const arr = episodeCompletesByShow.get(r.top_id);
+    if (arr) arr.push(r.created_at);
+    else episodeCompletesByShow.set(r.top_id, [r.created_at]);
+  }
+
+  // Weight fold: purely additive, so no ORDER BY needed. `created_at >= now -
+  // WINDOW` is exactly the old in-loop `age > WINDOW → skip` test (boundary
+  // and future-skewed timestamps included in both).
+  const events = db
+    .prepare("SELECT item_type, top_type, top_id, kind, ratio, created_at FROM watch_events WHERE user_id = ? AND created_at >= ?")
+    .all(userId, now - EVENTS_WINDOW_MS) as WatchEventRow[];
 
   for (const e of events) {
     const key = `${e.top_type}:${e.top_id}`;
-    seen.add(key);
-    if (e.kind === "complete") {
-      if (e.created_at > (lastCompleteAt.get(key) ?? 0)) lastCompleteAt.set(key, e.created_at);
-      if (e.item_type === "episode" && e.top_type === "show") {
-        const arr = episodeCompletesByShow.get(e.top_id);
-        if (arr) arr.push(e.created_at);
-        else episodeCompletesByShow.set(e.top_id, [e.created_at]);
-      }
-    }
-
-    const age = now - e.created_at;
-    if (age > EVENTS_WINDOW_MS) continue;
-    const d = decay(age, HALF_LIFE_MS);
+    const d = decay(now - e.created_at, HALF_LIFE_MS);
     if (e.kind === "complete") {
       const w = (0.5 + 0.5 * e.ratio) * d;
       pos.set(key, (pos.get(key) ?? 0) + w);

@@ -16,7 +16,7 @@ import { getDb } from "../db";
 import { createLogger } from "../logger";
 import { updateScanProgress } from "./scanner";
 import { cacheImageBuffer, cacheImageFile, cropToPosterAspect, findSeasonPoster, findSidecarImages, type ImageKind, type ImageSource } from "./images";
-import { extractAttachedPic, extractGeneratedFrame, ffmpegWasMissing, resetFfmpegMissing } from "./frameExtract";
+import { extractAttachedPic, extractGeneratedFrame, ffmpegMissingCount } from "./frameExtract";
 import type { HdrFormat } from "./ffprobe";
 
 const log = createLogger("imagesPass");
@@ -305,7 +305,6 @@ export async function runImagesPass(): Promise<void> {
   }
 
   running = true;
-  resetFfmpegMissing(); // a fixed FFMPEG_PATH since the last pass must clear the latch
   let warnedMissingFfmpeg = false;
   const { mediaDir } = getConfig();
   const total = pending.length;
@@ -318,13 +317,18 @@ export async function runImagesPass(): Promise<void> {
     while (cursor < pending.length) {
       const file = pending[cursor++];
       const abs = path.join(mediaDir, ...file.filepath.split("/"));
+      // Snapshot per FILE, not per pass: only an ENOENT raised while THIS file
+      // was processed blocks its stamp. (Workers run concurrently, so another
+      // worker's ENOENT can false-positive here — that just retries one file
+      // too many next scan, which is benign.)
+      const missingBefore = ffmpegMissingCount();
       try {
         if (file.movie_id) await processMovieFile(db, file, abs);
         else if (file.episode_id) await processEpisodeFile(db, mediaDir, file, abs);
       } catch (error) {
         log.warn("image extraction failed", { filepath: file.filepath, message: error instanceof Error ? error.message : String(error) });
       }
-      if (ffmpegWasMissing()) {
+      if (ffmpegMissingCount() > missingBefore) {
         // The ffmpeg BINARY is missing (spawn ENOENT) — that's a deployment
         // problem, not this file's: leave images_at = 0 so the file is retried
         // on the next scan once ffmpeg is installed/FFMPEG_PATH fixed.

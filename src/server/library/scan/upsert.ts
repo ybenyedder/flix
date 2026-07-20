@@ -152,7 +152,9 @@ export function processChangedBatch(db: DB, mediaDir: string, batch: WalkedVideo
 // drop DOES bump its directory's mtime though — so for UNCHANGED files whose
 // parent dir (or an adjacent Subs/ dir) is newer than the last completed scan,
 // re-run the sidecar subtitle refresh, and re-arm the image pass when a
-// sidecar image is newer than the file's images_at stamp.
+// sidecar image is newer than the file's images_at stamp. dirMtimes also folds
+// in subtitle-FILE mtimes (see walk.ts), so an .srt edited in place — which
+// bumps neither the video nor the directory — counts as touched too.
 export function refreshUnchangedSidecars(
   db: DB,
   mediaDir: string,
