@@ -1,6 +1,6 @@
 {
   "name": "flix",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": true,
   "description": "Flix — plateforme vidéo self-hosted, 100% locale : bibliothèque SQLite, scan ffprobe/NFO, lecture directe/remux/transcodage adaptatifs, recommandations locales. Web, Electron (Linux/Windows) et Android/Android TV.",
   "main": "desktop/main.js",

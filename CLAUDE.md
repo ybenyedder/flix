@@ -18,7 +18,7 @@ npm run start       # production next start on :4247
 npm run lint        # eslint, --max-warnings 0 (warnings fail)
 npm run typecheck   # tsc --noEmit
 npm run check       # lint + typecheck + build (run before considering work done)
-npm test            # node --test over test/*.test.ts (tsx loader) — ~464 tests
+npm test            # node --test over test/*.test.ts (tsx loader) — ~511 tests
 ```
 
 Run a single test file: `node --import tsx --test test/naming.test.ts`.
