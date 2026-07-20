@@ -82,9 +82,21 @@ jobs:
             if curl -fsS http://127.0.0.1:4247/api/health >/dev/null 2>&1; then ok=1; break; fi
             sleep 2
           done
+          # The curl above goes through the PUBLISHED port and cannot see a bad
+          # bind address; the image HEALTHCHECK probes 127.0.0.1 INSIDE the
+          # container — that's what caught nothing when start.mjs bound the
+          # container-id HOSTNAME. Require it to actually turn healthy.
+          # 60s window: the HEALTHCHECK interval is 30s, so the FIRST probe may
+          # only land ~30s in — a 30s wait would race it.
+          health=""
+          for i in $(seq 1 30); do
+            health="$(docker inspect --format='{{.State.Health.Status}}' flix-ci 2>/dev/null || true)"
+            [ "$health" = "healthy" ] && break
+            sleep 2
+          done
           docker logs flix-ci || true
           docker rm -f flix-ci || true
-          [ "$ok" = "1" ]
+          [ "$ok" = "1" ] && [ "$health" = "healthy" ]
 
   # NOTE: release artifacts (desktop installers + the Android/Android TV
   # APKs) are built and attached to the GitHub Release by release.yml, which

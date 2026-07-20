@@ -24,10 +24,10 @@ services:
       # Change the left side to your library path:
       - ./videos:/media:ro
     environment:
-      # Bind all interfaces. Without this, start.mjs falls back to the container's
-      # HOSTNAME (the container id → its eth0 IP only), so the image's HEALTHCHECK
-      # (which probes 127.0.0.1) can never reach the server and the container is
-      # reported "unhealthy" even though it serves fine over the published port.
+      # Belt-and-braces: start.mjs now defaults to the wildcard on its own
+      # (a non-IP HOSTNAME — Docker injects the container id — is ignored),
+      # but keeping the bind explicit documents intent and survives an
+      # operator exporting a stray FLIX_HOST elsewhere.
       FLIX_HOST: "0.0.0.0"
       # FLIX_ADMIN_PASSWORD: "change-me"   # skip the generated first-boot password
       # FLIX_MAX_TRANSCODES: "2"           # concurrent ffmpeg sessions cap

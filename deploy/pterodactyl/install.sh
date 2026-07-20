@@ -36,9 +36,16 @@ DOWNLOAD_URL="$(curl -fsSL "$API_URL" 2>/dev/null | jq -r --arg name "$ASSET" '.
 if [ -n "$DOWNLOAD_URL" ] && [ "$DOWNLOAD_URL" != "null" ]; then
   echo "==> Downloading prebuilt server bundle: ${DOWNLOAD_URL}"
   curl -fL "$DOWNLOAD_URL" -o /tmp/flix.tar.gz
+  # Extract to a scratch dir FIRST: wiping the old install before tar has
+  # proven the archive sound (ENOSPC, truncated download) would leave the
+  # server unbootable when the previous install still worked.
+  rm -rf /tmp/flix-extract
+  mkdir -p /tmp/flix-extract
+  tar -xzf /tmp/flix.tar.gz -C /tmp/flix-extract
   clean_app_files
-  tar -xzf /tmp/flix.tar.gz -C /mnt/server
-  rm -f /tmp/flix.tar.gz
+  # cp -a instead of mv: /tmp and /mnt/server may be different filesystems.
+  cp -a /tmp/flix-extract/. /mnt/server/
+  rm -rf /tmp/flix-extract /tmp/flix.tar.gz
 else
   echo "==> No prebuilt '${ASSET}' asset on ${GITHUB_REPO}@${VERSION} — building from source."
   echo "    (This needs roughly 3 GB of RAM in the install container.)"

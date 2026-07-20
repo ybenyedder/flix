@@ -45,6 +45,11 @@ const PRUNE = [
 for (const entry of PRUNE) {
   rmSync(path.join(out, entry), { recursive: true, force: true });
 }
+// Belt-and-braces vs a stale bundle tarball traced into the output (also
+// excluded in next.config.ts outputFileTracingExcludes): PRUNE can't glob.
+for (const entry of readdirSync(out)) {
+  if (/^flix-standalone-.*\.tar\.gz$/.test(entry)) rmSync(path.join(out, entry), { force: true });
+}
 
 // Standalone output does not include static assets — ship them alongside.
 cpSync(path.join(root, ".next", "static"), path.join(out, ".next", "static"), { recursive: true });
@@ -78,7 +83,14 @@ copyFileSync(path.join(root, "deploy", "container", "start.mjs"), path.join(out,
       // arbitrary hash-suffixed strings that happen to match the pattern.
       if (base === alias || !present.has(base) || present.has(alias)) continue;
       try {
-        symlinkSync(base, path.join(nodeModules, alias), "junction");
+        // win32: a junction resolves a RELATIVE target against the process
+        // CWD, not the link's directory — dangling link, creation "succeeds",
+        // fallback never fires (see prepare-desktop.mjs). Copy outright there.
+        if (process.platform === "win32") {
+          cpSync(path.join(nodeModules, base), path.join(nodeModules, alias), { recursive: true });
+        } else {
+          symlinkSync(base, path.join(nodeModules, alias));
+        }
       } catch {
         cpSync(path.join(nodeModules, base), path.join(nodeModules, alias), { recursive: true });
       }

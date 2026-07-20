@@ -7,8 +7,9 @@
 //   1. Port resolution   — FLIX_PORT > PORT > SERVER_PORT (Pterodactyl/Pelican
 //                          Wings injects SERVER_PORT) > 4247, exported as PORT
 //                          so Next's server.js and Flix's config agree.
-//   2. Bind address      — FLIX_HOST > HOSTNAME > 0.0.0.0. Containers must bind
-//                          the wildcard or the panel's port mapping goes nowhere.
+//   2. Bind address      — FLIX_HOST > HOSTNAME (literal IPs only) > 0.0.0.0.
+//                          Containers must bind the wildcard or the panel's
+//                          port mapping goes nowhere.
 //   3. ffmpeg preflight  — resolves FFMPEG_PATH/FFPROBE_PATH and warns loudly
 //                          (without refusing to boot: direct play works without
 //                          ffmpeg, scanning/remux/transcode do not).
@@ -19,8 +20,10 @@
 // Zero dependencies, Node 20+.
 
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import readline from "node:readline/promises";
 import fs from "node:fs";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 
@@ -34,7 +37,7 @@ import path from "node:path";
 process.env.NEXT_MANUAL_SIG_HANDLE = "true";
 
 const port = resolvePort();
-const host = firstEnv("FLIX_HOST", "HOSTNAME") ?? "0.0.0.0";
+const host = resolveHost();
 
 process.env.NODE_ENV ||= "production";
 process.env.PORT = String(port);
@@ -57,6 +60,21 @@ function resolvePort() {
   return Number.isInteger(value) && value > 0 && value < 65536 ? value : 4247;
 }
 
+function resolveHost() {
+  const explicit = firstEnv("FLIX_HOST");
+  if (explicit) return explicit;
+  // HOSTNAME is honoured ONLY when it is a literal IP: Docker/podman/Wings
+  // always inject HOSTNAME=<container id>, and binding that resolves to the
+  // eth0 address alone — loopback stops answering, so the image HEALTHCHECK
+  // and announceWhenReady() below (both 127.0.0.1) fail forever while the
+  // published port happily serves. That is the "unhealthy container /
+  // Pterodactyl stuck on starting" failure seen in production. Next's own
+  // standalone server reads HOSTNAME the same way, hence the export below.
+  const hostname = firstEnv("HOSTNAME");
+  if (hostname && net.isIP(hostname)) return hostname;
+  return "0.0.0.0";
+}
+
 function checkBinary(label, envName, fallback) {
   const bin = firstEnv(envName) ?? fallback;
   const probe = spawnSync(bin, ["-version"], { stdio: "ignore" });
@@ -73,6 +91,24 @@ function checkBinary(label, envName, fallback) {
 
 checkBinary("ffmpeg", "FFMPEG_PATH", "ffmpeg");
 checkBinary("ffprobe", "FFPROBE_PATH", "ffprobe");
+
+// ABI preflight — fatal, unlike the ffmpeg warnings above: the bundled
+// better-sqlite3 binding is compiled for Node 22 (Dockerfile/CI/egg all
+// agree), and under a mismatched Node the server still boots, /api/health
+// answers 200 "degraded" and the ready banner prints — a total DB outage
+// (every route 500s) disguised as a successful start. Requiring the module
+// loads the native binding without opening any database.
+try {
+  createRequire(import.meta.url)("better-sqlite3");
+} catch (error) {
+  console.error(
+    `[flix] FATAL: the bundled better-sqlite3 native binding cannot load under ` +
+      `Node ${process.versions.node} (${error instanceof Error ? error.message : error}).\n` +
+      `[flix] This bundle is built for Node 22 — run it with Node 22, or rebuild ` +
+      `the binding in place: npm rebuild better-sqlite3`,
+  );
+  process.exit(1);
+}
 
 // Poll our own health endpoint until the HTTP server actually answers, then
 // print the readiness banner. Runs alongside the server import below; gives

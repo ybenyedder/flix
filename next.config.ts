@@ -23,6 +23,10 @@ const nextConfig: NextConfig = {
       "vpn/**",
       "dist-desktop/**",
       "dist-standalone/**",
+      // Un tarball de bundle précédent qui traîne à la racine (sortie de
+      // `prepare-standalone --tar`) serait sinon embarqué (~20 Mo de bundle
+      // périmé) dans le standalone suivant ET dans les installeurs desktop.
+      "flix-standalone-*.tar.gz",
       "android-native/**",
       "test/**",
       "tests/**",

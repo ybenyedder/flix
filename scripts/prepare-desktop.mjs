@@ -60,6 +60,11 @@ const PRUNE = [
 for (const entry of PRUNE) {
   rmSync(path.join(serverOut, entry), { recursive: true, force: true });
 }
+// Belt-and-braces vs a stale bundle tarball traced into the output (also
+// excluded in next.config.ts outputFileTracingExcludes): PRUNE can't glob.
+for (const entry of readdirSync(serverOut)) {
+  if (/^flix-standalone-.*\.tar\.gz$/.test(entry)) rmSync(path.join(serverOut, entry), { force: true });
+}
 console.log(`[prepare-desktop] pruned standalone cruft: ${PRUNE.join(", ")}`);
 
 // 1. Static assets ----------------------------------------------------------
@@ -91,7 +96,15 @@ copyFileSync(path.join(root, "desktop", "server-shim.js"), path.join(serverOut, 
       const base = alias.replace(/-[0-9a-f]{16}$/, "");
       if (base === alias || !present.has(base) || present.has(alias)) continue;
       try {
-        symlinkSync(base, path.join(nodeModules, alias), "junction");
+        // win32: a junction resolves a RELATIVE target against the process
+        // CWD (not the link's directory), yielding a DANGLING link whose
+        // creation still succeeds — the cpSync fallback never fired and the
+        // packaged app's require() failed at runtime. Copy outright there.
+        if (process.platform === "win32") {
+          cpSync(path.join(nodeModules, base), path.join(nodeModules, alias), { recursive: true });
+        } else {
+          symlinkSync(base, path.join(nodeModules, alias));
+        }
       } catch {
         cpSync(path.join(nodeModules, base), path.join(nodeModules, alias), { recursive: true });
       }
