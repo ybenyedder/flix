@@ -60,13 +60,14 @@ linux:
   # panels/menus won't downscale it — the app then shows a generic icon (the
   # AppImage is unaffected because it embeds its own icon).
   icon: build/icons
-  # electron-builder writes these keys verbatim into [Desktop Entry] (must be a
-  # FLAT map — a nested `entry:` here is emitted literally as `entry=[object
-  # Object]` and ignored). Note `Categories` is NOT settable here: app-builder-lib
-  # always derives it from `category` above and overwrites whatever is set on
-  # this map (verified against node_modules/app-builder-lib's LinuxTargetHelper).
+  # electron-builder 26 schema: [Desktop Entry] keys live under `entry:` (the
+  # EXACT opposite of v25, where a flat map was required and `entry:` was
+  # emitted literally — the v26 validator now rejects the flat shape outright).
+  # Note `Categories` is NOT settable here: app-builder-lib always derives it
+  # from `category` above and overwrites whatever is set on this map.
   desktop:
-    Name: Flix
+    entry:
+      Name: Flix
 
 deb:
   depends:
