@@ -94,6 +94,7 @@ fun TvPlayerScreen(vm: TvViewModel, ui: TvUiState, screen: TvScreen.Player) {
     var nextUpDismissed by remember(screen) { mutableStateOf(false) }
     var advanced by remember(screen) { mutableStateOf(false) }
     val playPauseFocus = remember { FocusRequester() }
+    val nextUpPlayFocus = remember { FocusRequester() }
     // Auto-hide: controls show on any D-pad key and fade after a few seconds of
     // inactivity while playing. `interactions` bumps on every key so the
     // hide-timer effect restarts (cancelling the previous delay) — no wall
@@ -290,15 +291,25 @@ fun TvPlayerScreen(vm: TvViewModel, ui: TvUiState, screen: TvScreen.Player) {
         }
 
         if (nextUpVisible && !advanced) {
+            // Steal the focus while the offer is up: the transport buttons stay
+            // focusable at alpha 0, so without this OK would land on play/pause
+            // and PAUSE the video underneath the overlay instead of launching
+            // the next episode. Focus is handed back on dismiss.
+            LaunchedEffect(Unit) { runCatching { nextUpPlayFocus.requestFocus() } }
             Box(Modifier.fillMaxSize().padding(56.dp), contentAlignment = Alignment.BottomEnd) {
                 Column(Modifier.background(colors.surface, RoundedCornerShape(10.dp)).padding(22.dp), horizontalAlignment = Alignment.End) {
                     Text("Épisode suivant", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(14.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        TvPillButton("Ignorer", onClick = { nextUpVisible = false; nextUpDismissed = true })
+                        TvPillButton("Ignorer", onClick = {
+                            nextUpVisible = false
+                            nextUpDismissed = true
+                            runCatching { playPauseFocus.requestFocus() }
+                        })
                         TvPillButton(
                             "Lire",
                             emphasized = true,
+                            modifier = Modifier.focusRequester(nextUpPlayFocus),
                             onClick = {
                                 val t = target
                                 if (t != null && t.episodeIndex in 0 until t.episodeList.lastIndex) {
@@ -345,10 +356,11 @@ private fun TvCtrlButton(glyph: String, onClick: () -> Unit, modifier: Modifier 
 }
 
 @Composable
-private fun TvPillButton(label: String, onClick: () -> Unit, emphasized: Boolean = false) {
+private fun TvPillButton(label: String, onClick: () -> Unit, emphasized: Boolean = false, modifier: Modifier = Modifier) {
     val colors = LocalFlixTvColors.current
     Surface(
         onClick = onClick,
+        modifier = modifier,
         shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(6.dp)),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (emphasized) Color.White else colors.chip,

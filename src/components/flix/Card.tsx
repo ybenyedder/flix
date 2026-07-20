@@ -299,7 +299,8 @@ function CardOverlay({ item, rect, inMyList, rating, watched, match, onMouseEnte
         <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-muted">
           {match !== null && <span className="font-bold text-green-500">{match}% de correspondance</span>}
           {item.year && <span>{item.year}</span>}
-          {item.type === "movie" ? <span>{formatDuration(item.duration)}</span> : <span>{item.seasonCount} saison{item.seasonCount > 1 ? "s" : ""}</span>}
+          {/* duration = 0 means "ffprobe failed", not a 0-minute film */}
+          {item.type === "movie" ? item.duration > 0 && <span>{formatDuration(item.duration)}</span> : <span>{item.seasonCount} saison{item.seasonCount > 1 ? "s" : ""}</span>}
           {label && <span className="rounded-full border border-white/30 px-1.5 text-[10px]">{label}</span>}
           {item.quality.hdr && <span className="rounded-full border border-white/30 px-1.5 text-[10px]">HDR</span>}
         </div>

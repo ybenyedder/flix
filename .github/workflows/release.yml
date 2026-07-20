@@ -54,6 +54,12 @@ jobs:
       - name: Build and publish Electron app
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The server-bundle job pre-creates a PUBLISHED release; electron-
+          # publish refuses to touch a published release older than 2 hours
+          # (its anti-clobber heuristic) and silently SKIPS the upload with a
+          # green job — a desktop leg re-run the next day would ship a release
+          # with no installers. This opt-out disables that time check.
+          EP_GH_IGNORE_TIME: "1"
         run: npx electron-builder --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
 
   # Build the standalone server bundle (the thing Docker/Pterodactyl deploys)

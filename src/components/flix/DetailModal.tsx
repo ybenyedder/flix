@@ -279,8 +279,9 @@ function DetailModalContent({ target }: { target: DetailTarget }) {
                 <div className="mb-3 flex flex-wrap items-center gap-3 text-sm text-muted">
                   {detail.year && <span className="font-semibold text-green-500">{detail.year}</span>}
                   {detail.contentRating && <span className="rounded-full border border-white/30 px-1.5 py-0.5 text-xs">{detail.contentRating}</span>}
+                  {/* duration = 0 means "ffprobe failed", not a 0-minute film */}
                   {detail.type === "movie" ? (
-                    <span>{formatDuration(detail.duration)}</span>
+                    detail.duration > 0 && <span>{formatDuration(detail.duration)}</span>
                   ) : (
                     <span>
                       {detail.seasonCount} saison{detail.seasonCount > 1 ? "s" : ""}
