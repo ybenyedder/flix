@@ -55,7 +55,7 @@ fun TvDetailScreen(vm: TvViewModel, ui: TvUiState, type: String, id: Int) {
     val colors = LocalFlixTvColors.current
     Box(Modifier.fillMaxSize().background(colors.background)) {
         if (type == "movie") {
-            ui.movieDetails[id]?.let { detail -> TvMovieDetail(vm, detail.item) }
+            ui.movieDetails[id]?.let { detail -> TvMovieDetail(vm, ui, detail.item) }
         } else {
             ui.showDetails[id]?.let { detail -> TvShowDetail(vm, ui, detail) }
         }
@@ -142,9 +142,16 @@ private fun TvActionRow(vm: TvViewModel, type: String, id: Int, playLabel: Strin
 }
 
 @Composable
-private fun TvMovieDetail(vm: TvViewModel, item: CatalogItem) {
+private fun TvMovieDetail(vm: TvViewModel, ui: TvUiState, item: CatalogItem) {
+    // Same resume semantics as the home-screen cards: a mid-watched movie must
+    // resume from its saved position, not silently restart at 0:00.
+    val progress = ui.userState.progress.firstOrNull { it.itemType == "movie" && it.itemId == item.id && !it.watched && it.ratio in 0.02..0.92 }
     Column(Modifier.fillMaxSize()) {
-        TvHeaderArt(vm, item) { TvActionRow(vm, item.type, item.id, "Lecture") { vm.play(item.type, item.id) } }
+        TvHeaderArt(vm, item) {
+            TvActionRow(vm, item.type, item.id, if (progress != null) "Reprendre" else "Lecture") {
+                vm.play(item.type, item.id, resumeMs = ((progress?.position ?: 0.0) * 1000).toLong())
+            }
+        }
     }
 }
 
@@ -161,7 +168,16 @@ private fun TvShowDetail(vm: TvViewModel, ui: TvUiState, show: ShowDetail) {
                 val playLabel = if (nextUp != null) "Reprendre" else "Lecture"
                 TvActionRow(vm, "show", show.item.id, playLabel) {
                     val ep = nextUp ?: show.flattenEpisodes().firstOrNull()
-                    if (ep != null) vm.play("show", show.item.id, ep.id) else vm.play("show", show.item.id)
+                    if (ep != null) {
+                        // "Reprendre" must actually resume: nextUpEpisode can
+                        // return an episode already IN PROGRESS — starting it
+                        // at 0:00 would lose the position the home-screen card
+                        // and the episode rows below both restore correctly.
+                        val progress = ui.userState.progress.firstOrNull { it.itemType == "episode" && it.itemId == ep.id && !it.watched }
+                        vm.play("show", show.item.id, ep.id, ((progress?.position ?: 0.0) * 1000).toLong())
+                    } else {
+                        vm.play("show", show.item.id)
+                    }
                 }
             }
         }

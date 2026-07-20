@@ -88,6 +88,10 @@ fun TvPlayerScreen(vm: TvViewModel, ui: TvUiState, screen: TvScreen.Player) {
     var error by remember(screen) { mutableStateOf<String?>(null) }
     var activeSession by remember(screen) { mutableStateOf<PlaySession.Hls?>(null) }
     var nextUpVisible by remember(screen) { mutableStateOf(false) }
+    // "Ignorer" must stick: the 8s progress loop recomputes nextUpVisible
+    // unconditionally, so without this latch the overlay pops right back on
+    // the next tick. Reset per `screen` — the next episode gets its own offer.
+    var nextUpDismissed by remember(screen) { mutableStateOf(false) }
     var advanced by remember(screen) { mutableStateOf(false) }
     val playPauseFocus = remember { FocusRequester() }
     // Auto-hide: controls show on any D-pad key and fade after a few seconds of
@@ -150,7 +154,7 @@ fun TvPlayerScreen(vm: TvViewModel, ui: TvUiState, screen: TvScreen.Player) {
             val durMs = vm.player.durationMs()
             if (durMs <= 0) continue
             vm.saveProgress(t.itemType, t.itemId, posMs / 1000.0, durMs / 1000.0, t.file.id)
-            nextUpVisible = t.episodeIndex in 0 until t.episodeList.lastIndex && (durMs - posMs) in 0..30_000
+            nextUpVisible = !nextUpDismissed && t.episodeIndex in 0 until t.episodeList.lastIndex && (durMs - posMs) in 0..30_000
         }
     }
 
@@ -204,8 +208,13 @@ fun TvPlayerScreen(vm: TvViewModel, ui: TvUiState, screen: TvScreen.Player) {
                 controlsVisible = true
                 interactions++
                 // Swallow only the FIRST key that wakes the controls, so it
-                // reveals them instead of also triggering the focused button.
-                wasHidden
+                // reveals them instead of also triggering the focused button —
+                // and only while the transport layer is the active one: the
+                // error and next-up overlays render fully visible regardless of
+                // controlsVisible, so eating their first OK/BACK press would
+                // force the user to press every button twice.
+                val transportActive = shownError == null && !loading && !(nextUpVisible && !advanced)
+                wasHidden && transportActive
             } else {
                 false
             }
@@ -286,7 +295,7 @@ fun TvPlayerScreen(vm: TvViewModel, ui: TvUiState, screen: TvScreen.Player) {
                     Text("Épisode suivant", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(14.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        TvPillButton("Ignorer", onClick = { nextUpVisible = false })
+                        TvPillButton("Ignorer", onClick = { nextUpVisible = false; nextUpDismissed = true })
                         TvPillButton(
                             "Lire",
                             emphasized = true,

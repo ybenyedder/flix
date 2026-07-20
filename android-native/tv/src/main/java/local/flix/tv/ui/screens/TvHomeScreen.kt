@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -43,6 +44,8 @@ import androidx.tv.material3.Border
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.Text
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import local.flix.core.model.CatalogItem
 import local.flix.core.model.ProgressSummary
 import local.flix.core.model.filterForProfile
@@ -57,25 +60,34 @@ import local.flix.tv.ui.theme.LocalFlixTvColors
 
 private const val OVERSCAN = 48
 
-private data class TvRow(val title: String, val items: List<CatalogItem>, val continueRow: Boolean = false)
+// `id` keys the LazyColumn row — NEVER key on the title: the server only
+// guarantees row *ids* are unique, two reco rows can share a title (homonym
+// seeds → "Parce que vous avez regardé Dune" twice) and a duplicate LazyColumn
+// key crashes the whole home screen.
+private data class TvRow(val id: String, val title: String, val items: List<CatalogItem>, val continueRow: Boolean = false)
 
 private fun buildRows(ui: TvUiState): List<TvRow> {
     val rows = mutableListOf<TvRow>()
+    // The server sends progress PER EPISODE (no per-show dedup — the web
+    // client keys on the episode id, we key cards on the top-level item key),
+    // so two in-flight episodes of one show map to the same CatalogItem:
+    // distinctBy keeps the first (most recent) or the LazyRow key crashes.
     val continueItems = ui.userState.progress.filter { it.ratio in 0.02..0.92 }
     if (continueItems.isNotEmpty()) {
-        rows.add(TvRow("Continuer à regarder", continueItems.mapNotNull { ui.library.byKey["${it.topType}:${it.topId}"] }, continueRow = true))
+        val items = continueItems.mapNotNull { ui.library.byKey["${it.topType}:${it.topId}"] }.distinctBy { it.key }
+        if (items.isNotEmpty()) rows.add(TvRow("continue", "Continuer à regarder", items, continueRow = true))
     }
     if (ui.userState.myList.isNotEmpty()) {
-        val items = ui.userState.myList.mapNotNull { ui.library.byKey[it.key] }.filterForProfile(ui.isKids)
-        if (items.isNotEmpty()) rows.add(TvRow("Ma liste", items))
+        val items = ui.userState.myList.mapNotNull { ui.library.byKey[it.key] }.filterForProfile(ui.isKids).distinctBy { it.key }
+        if (items.isNotEmpty()) rows.add(TvRow("mylist", "Ma liste", items))
     }
     for (row in ui.recommend.rows) {
-        val items = row.items.mapNotNull { ui.library.byKey[it.key] }.filterForProfile(ui.isKids)
-        if (items.isNotEmpty()) rows.add(TvRow(row.title, items))
+        val items = row.items.mapNotNull { ui.library.byKey[it.key] }.filterForProfile(ui.isKids).distinctBy { it.key }
+        if (items.isNotEmpty()) rows.add(TvRow("reco:${row.id}", row.title, items))
     }
     if (ui.recommend.rows.isEmpty()) {
-        if (ui.visibleMovies.isNotEmpty()) rows.add(TvRow("Films", ui.visibleMovies.sortedByDescending { it.addedAt }))
-        if (ui.visibleShows.isNotEmpty()) rows.add(TvRow("Séries", ui.visibleShows.sortedByDescending { it.addedAt }))
+        if (ui.visibleMovies.isNotEmpty()) rows.add(TvRow("films", "Films", ui.visibleMovies.sortedByDescending { it.addedAt }))
+        if (ui.visibleShows.isNotEmpty()) rows.add(TvRow("series", "Séries", ui.visibleShows.sortedByDescending { it.addedAt }))
     }
     return rows
 }
@@ -90,10 +102,24 @@ fun TvHomeScreen(vm: TvViewModel, ui: TvUiState) {
     val colors = LocalFlixTvColors.current
     val rows = remember(ui.recommend, ui.userState, ui.library) { buildRows(ui) }
     var focusedItem by remember { mutableStateOf(pickBillboard(ui)) }
+    // The billboard art lags the focused card by a debounce: without it, every
+    // D-pad step through a row fetches + decodes a full-screen 1440px backdrop
+    // (with a fallback-gradient flash on each cache miss) — stuttery on modest
+    // TV hardware. collectLatest cancels the pending delay on every new focus,
+    // so only a card the user RESTS on becomes the hero.
+    var billboardItem by remember { mutableStateOf(focusedItem) }
+    LaunchedEffect(Unit) {
+        snapshotFlow { focusedItem }.collectLatest { item ->
+            if (item !== billboardItem) {
+                delay(300)
+                billboardItem = item
+            }
+        }
+    }
     val firstCardFocus = remember { FocusRequester() }
 
     Box(Modifier.fillMaxSize().background(colors.background)) {
-        val hero = focusedItem ?: pickBillboard(ui)
+        val hero = billboardItem ?: pickBillboard(ui)
 
         LazyColumn(
             Modifier.fillMaxSize(),
@@ -107,7 +133,7 @@ fun TvHomeScreen(vm: TvViewModel, ui: TvUiState) {
                     Spacer(Modifier.height(120.dp))
                 }
             }
-            itemsIndexed(rows, key = { _, r -> r.title }) { rowIndex, row ->
+            itemsIndexed(rows, key = { _, r -> r.id }) { rowIndex, row ->
                 TvContentRow(
                     vm, ui, row,
                     firstFocusRequester = if (rowIndex == 0) firstCardFocus else null,

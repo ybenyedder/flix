@@ -72,18 +72,22 @@ private data class HomeRow(val title: String, val items: List<CatalogItem>, val 
 private fun buildHomeRows(ui: UiState): List<HomeRow> {
     val rows = mutableListOf<HomeRow>()
 
+    // The server sends progress PER EPISODE (no per-show dedup), so two
+    // in-flight episodes of one show map to the same CatalogItem — distinctBy
+    // keeps the first, or the LazyRow key (`it.key`) crashes the home screen.
     val continueItems = ui.userState.progress.filter { it.ratio in 0.02..0.92 }
     if (continueItems.isNotEmpty()) {
-        rows.add(HomeRow("Continuer à regarder", continueItems.mapNotNull { ui.library.byKey["${it.topType}:${it.topId}"] }, continueRow = true))
+        val items = continueItems.mapNotNull { ui.library.byKey["${it.topType}:${it.topId}"] }.distinctBy { it.key }
+        if (items.isNotEmpty()) rows.add(HomeRow("Continuer à regarder", items, continueRow = true))
     }
 
     if (ui.userState.myList.isNotEmpty()) {
-        val items = ui.userState.myList.mapNotNull { ui.library.byKey[it.key] }.filterForProfile(ui.isKids)
+        val items = ui.userState.myList.mapNotNull { ui.library.byKey[it.key] }.filterForProfile(ui.isKids).distinctBy { it.key }
         if (items.isNotEmpty()) rows.add(HomeRow("Ma liste", items))
     }
 
     for (row in ui.recommend.rows) {
-        val items = row.items.mapNotNull { ui.library.byKey[it.key] }.filterForProfile(ui.isKids)
+        val items = row.items.mapNotNull { ui.library.byKey[it.key] }.filterForProfile(ui.isKids).distinctBy { it.key }
         if (items.isNotEmpty()) rows.add(HomeRow(row.title, items))
     }
 
