@@ -20,7 +20,7 @@ import {
   type BrowseSort,
   type CatalogItem,
 } from "@/lib/flix/rows";
-import { Card } from "./Card";
+import { ProgressiveCardGrid } from "./ProgressiveCardGrid";
 
 const SORT_OPTIONS: { id: BrowseSort; label: string }[] = [
   { id: "recent", label: "Récents" },
@@ -144,11 +144,13 @@ function BrowseInner({ kind }: { kind: "movie" | "show" }) {
       {items.length === 0 ? (
         <p className="text-muted">{base.length === 0 ? "Aucun titre." : "Aucun titre ne correspond aux filtres."}</p>
       ) : (
-        <div className="stagger-children grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7">
-          {items.map((item) => (
-            <Card key={`${item.type}-${item.id}`} item={item} />
-          ))}
-        </div>
+        // Keyed on the filter/sort tuple: changing it remounts the grid, which
+        // resets the progressive batch counter back to the first batch.
+        <ProgressiveCardGrid
+          key={`${sort}|${filters.decade ?? ""}|${filters.unseenOnly}|${filters.fourK}|${filters.hdr}|${filters.genres.join(",")}`}
+          items={items}
+          gridClassName="stagger-children grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7"
+        />
       )}
     </div>
   );

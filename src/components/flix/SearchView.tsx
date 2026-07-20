@@ -13,7 +13,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/flix/api";
 import type { SearchResults } from "@/lib/flix/types";
 import { useUiStore } from "@/store/ui";
-import { Card } from "./Card";
+import { ProgressiveCardGrid } from "./ProgressiveCardGrid";
 import { DiscoverSection } from "./DiscoverSection";
 import { SkeletonGrid } from "./Skeletons";
 
@@ -57,11 +57,13 @@ export function SearchView() {
       {loading && <SkeletonGrid />}
       {current && items.length === 0 && <p className="text-muted">Aucun résultat. Essayez un autre titre ou lancez une demande.</p>}
       {current && items.length > 0 && (
-        <div className="stagger-children grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7">
-          {items.map((item) => (
-            <Card key={`${item.type}-${item.id}`} item={item} />
-          ))}
-        </div>
+        // Keyed on the query: a new search remounts the grid and resets the
+        // progressive batch counter.
+        <ProgressiveCardGrid
+          key={current.query}
+          items={items}
+          gridClassName="stagger-children grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7"
+        />
       )}
       {/* External discovery (opt-in *arr): request titles not in the library.
           Self-hides for kids / when the feature is off. */}
