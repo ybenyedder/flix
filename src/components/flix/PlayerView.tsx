@@ -461,7 +461,14 @@ function PlayerSession({ initial }: { initial: PlaybackRequest }) {
       // at initial parse — so without this a subtitle picked from the menu
       // silently stays "disabled" and never renders.
       if (active) active.mode = "showing";
-      else if (activeTextSubtitle) raf = requestAnimationFrame(apply);
+      else if (activeTextSubtitle) {
+        // Cancel before re-arming: `apply` also fires from loadedmetadata, and
+        // two live chains sharing this single `raf` handle would leave one of
+        // them uncancellable at cleanup — an infinite rAF loop kept alive on a
+        // detached <video> after the player unmounts.
+        if (raf) cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(apply);
+      }
     };
     apply();
     video.addEventListener("loadedmetadata", apply);

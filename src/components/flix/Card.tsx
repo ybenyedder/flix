@@ -21,6 +21,11 @@ import { useRecoStore } from "@/store/reco";
 
 const HOVER_DELAY_MS = 500;
 const OVERLAY_SCALE = 1.4;
+// The overlay's action row (6 size-8 buttons + gaps + padding) needs ~256px;
+// 1.4× a narrow 2:3 poster tile (11vw at lg) stays under that on anything
+// below ~1660px wide, squashing the round buttons into ellipses. Floor the
+// overlay width instead — the existing `left` clamp absorbs the overhang.
+const OVERLAY_MIN_WIDTH = 280;
 
 // The tile is a vertical "cover": prefer the real 2:3 poster, then fall back
 // to a cropped backdrop/thumb.
@@ -41,8 +46,13 @@ function landscapeImage(item: CatalogEntry): string | null {
 function metaParts(item: CatalogEntry): string {
   const parts: string[] = [];
   if (item.year) parts.push(String(item.year));
-  if (item.type === "movie") parts.push(formatDuration(item.duration));
-  else if (item.seasonCount) parts.push(`${item.seasonCount} saison${item.seasonCount > 1 ? "s" : ""}`);
+  if (item.type === "movie") {
+    // duration = 0 means "ffprobe failed" (failure-tolerant scan), not a
+    // zero-minute film — showing "0 min" forever would just look broken.
+    if (item.duration > 0) parts.push(formatDuration(item.duration));
+  } else if (item.seasonCount) {
+    parts.push(`${item.seasonCount} saison${item.seasonCount > 1 ? "s" : ""}`);
+  }
   return parts.join(" · ");
 }
 
@@ -206,7 +216,7 @@ interface CardOverlayProps {
 }
 
 function CardOverlay({ item, rect, inMyList, rating, watched, match, onMouseEnter, onMouseLeave, onPlay, onToggleList, onRate, onToggleWatched, onOpenDetail }: CardOverlayProps) {
-  const width = rect.width * OVERLAY_SCALE;
+  const width = Math.max(rect.width * OVERLAY_SCALE, OVERLAY_MIN_WIDTH);
   const maxLeft = typeof window !== "undefined" ? window.innerWidth - width - 8 : rect.left;
   const left = Math.min(Math.max(8, rect.left - (width - rect.width) / 2), Math.max(8, maxLeft));
   // Anchor the LANDSCAPE preview near the top of the (taller) poster tile and

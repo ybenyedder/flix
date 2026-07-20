@@ -325,12 +325,14 @@ button {
 
 /* --- subtitle cues --------------------------------------------------------
  * The native WebVTT renderer is used (a <track> on the <video>). Give cues a
- * legible, cinema-style default: large, white, heavy, with a solid shadow so
- * they stay readable over any frame — the browser default is often too small
- * and low-contrast on a big screen. Positioned by the browser near the bottom;
- * the player controls auto-hide, so they don't fight the cues during playback. */
+ * legible, cinema-style default: white, heavy, with a solid shadow so they
+ * stay readable over any frame. font-size is viewport-relative, NOT a fixed
+ * rem: the engine's own default is ~5% of the video height, so a fixed 1.15rem
+ * (~18px) would make full-window 1080p/4K cues several times SMALLER than
+ * stock — unreadable from a couch. The player is always full-viewport
+ * (fixed inset-0), so vmin tracks the video size in practice. */
 video::cue {
-  font-size: 1.15rem;
+  font-size: 4.5vmin;
   line-height: 1.35;
   font-weight: 600;
   color: #fff;

@@ -10,21 +10,25 @@ export function SkeletonHero() {
   );
 }
 
+// Tile shape/widths mirror the REAL views (2:3 posters — Card.tsx, Row.tsx
+// itemClassName, BrowseView grid): a skeleton in yesterday's 16:9 layout
+// would swap to portrait jackets on load, a big layout shift on every
+// Browse/Search navigation.
 export function SkeletonRow() {
   return (
     <div className="flex gap-2 overflow-hidden px-4 py-2 md:px-12" aria-hidden>
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="aspect-video w-[45vw] shrink-0 rounded-card shimmer sm:w-[30vw] md:w-[19vw] lg:w-[15vw]" />
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div key={i} className="aspect-[2/3] w-[30vw] shrink-0 rounded-card shimmer sm:w-[20vw] md:w-[14vw] lg:w-[11vw]" />
       ))}
     </div>
   );
 }
 
-export function SkeletonGrid({ count = 12 }: { count?: number }) {
+export function SkeletonGrid({ count = 14 }: { count?: number }) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5" aria-hidden>
+    <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7" aria-hidden>
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="aspect-video rounded-card shimmer" />
+        <div key={i} className="aspect-[2/3] rounded-card shimmer" />
       ))}
     </div>
   );
