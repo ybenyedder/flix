@@ -16,7 +16,7 @@ services:
     # Pinned to the released version (bumped by each release commit): a bare
     # :latest can silently jump versions on any `docker compose pull` —
     # upgrades should be a deliberate tag change here.
-    image: ghcr.io/ybenyedder/flix:0.11.0
+    image: ghcr.io/ybenyedder/flix:0.12.0
     build: .
     container_name: flix
     restart: unless-stopped
