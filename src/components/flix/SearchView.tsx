@@ -53,7 +53,7 @@ export function SearchView() {
 
   return (
     <div className="min-h-screen px-4 pb-20 pt-24 md:px-12">
-      <h1 className="mb-6 font-display text-2xl font-semibold text-white">{trimmed ? `Résultats pour « ${trimmed} »` : "Recherchez un titre, un genre…"}</h1>
+      <h1 className="mb-6 font-display text-3xl font-bold tracking-tight text-white">{trimmed ? `Résultats pour « ${trimmed} »` : "Recherchez un titre, un genre…"}</h1>
       {loading && <SkeletonGrid />}
       {current && items.length === 0 && <p className="text-muted">Aucun résultat. Essayez un autre titre ou lancez une demande.</p>}
       {current && items.length > 0 && (

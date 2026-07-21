@@ -72,7 +72,7 @@ function BrowseInner({ kind }: { kind: "movie" | "show" }) {
 
   return (
     <div className="min-h-screen px-4 pb-20 pt-24 md:px-12">
-      <h1 className="mb-4 font-display text-2xl font-semibold text-white">{kind === "movie" ? "Films" : "Séries"}</h1>
+      <h1 className="mb-5 font-display text-3xl font-bold tracking-tight text-white">{kind === "movie" ? "Films" : "Séries"}</h1>
 
       {genres.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-2">

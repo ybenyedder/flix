@@ -8,9 +8,10 @@
 
 import { memo, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import Image from "next/image";
-import { Info, X } from "lucide-react";
+import { Info, Play, X } from "lucide-react";
 import { api } from "@/lib/flix/api";
 import type { ProgressSummary } from "@/lib/flix/types";
+import { formatDuration } from "@/lib/flix/format";
 import { useUiStore } from "@/store/ui";
 import { usePlayerStore } from "@/store/player";
 import { useStateStore } from "@/store/state";
@@ -50,12 +51,25 @@ function ContinueWatchingCardBase({ entry }: { entry: ProgressSummary }) {
       onClick={play}
       onKeyDown={onKeyDown}
     >
-      <div className="relative aspect-video overflow-hidden rounded-card bg-surface">
+      <div className="relative aspect-video overflow-hidden rounded-card bg-surface ring-1 ring-white/5 transition-shadow duration-200 group-hover:ring-2 group-hover:ring-white/25">
         {imageUrl ? (
-          <Image src={imageUrl} alt={entry.title} fill sizes="(max-width: 768px) 45vw, 20vw" className="object-cover" />
+          <Image
+            src={imageUrl}
+            alt={entry.title}
+            fill
+            sizes="(max-width: 768px) 45vw, 20vw"
+            className="object-cover transition-transform duration-300 ease-out-quart group-hover:scale-[1.05]"
+          />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-surface-hover text-sm font-semibold text-muted">{entry.title}</div>
         )}
+        {/* Resume affordance: a glass play chip surfaces on hover/focus, so the
+         * whole card visibly IS the resume action, not just an image. */}
+        <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/0 transition-colors duration-200 group-hover:bg-black/30">
+          <span className="grid size-12 place-items-center rounded-full glass opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+            <Play className="size-6 fill-white text-white" />
+          </span>
+        </span>
         <button
           type="button"
           onClick={(e) => {
@@ -80,13 +94,18 @@ function ContinueWatchingCardBase({ entry }: { entry: ProgressSummary }) {
         >
           <X className="size-4" />
         </button>
-        <div className="absolute inset-x-0 bottom-0 h-1 rounded-full bg-white/15">
+        {/* Floating rounded progress track (2026 style) instead of a bar glued
+         * to the card edge. */}
+        <div className="absolute inset-x-2.5 bottom-2 h-1 overflow-hidden rounded-full bg-white/25">
           <div className="h-full rounded-full bg-accent" style={{ width: `${ratio * 100}%` }} />
         </div>
       </div>
-      <div className="mt-1 space-y-0.5">
+      <div className="mt-1.5 space-y-0.5 px-0.5">
         <p className="line-clamp-1 text-sm font-medium text-white">{entry.title}</p>
-        {entry.subtitle && <p className="line-clamp-1 text-xs text-muted">{entry.subtitle}</p>}
+        <p className="line-clamp-1 text-xs text-muted">
+          {entry.subtitle ? `${entry.subtitle} · ` : ""}
+          {entry.duration > entry.position ? `il reste ${formatDuration(entry.duration - entry.position)}` : ""}
+        </p>
       </div>
     </div>
   );

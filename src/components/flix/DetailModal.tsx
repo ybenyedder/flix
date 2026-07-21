@@ -161,7 +161,7 @@ function DetailModalContent({ target }: { target: DetailTarget }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-black/70 py-6 backdrop-blur-sm md:py-12"
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/75 py-6 backdrop-blur-md md:py-12"
       onPointerDown={(e) => {
         backdropPressRef.current = e.target === e.currentTarget;
       }}
@@ -199,6 +199,7 @@ function DetailModalContent({ target }: { target: DetailTarget }) {
                 <div className="h-full w-full bg-gradient-to-br from-surface-hover to-surface" />
               )}
               <div className="detail-fade-bottom absolute inset-0" />
+              <div className="detail-fade-top absolute inset-0" />
               <div className="absolute bottom-6 left-6 right-6">
                 {logo ? (
                   <div className="relative mb-3 h-16 w-2/3 max-w-sm">

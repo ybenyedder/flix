@@ -18,11 +18,13 @@ function Top10CardBase({ item, rank }: { item: CatalogEntry; rank: number }) {
   const imageUrl = posterSource ? api.imageUrl(posterSource, 240) : null;
 
   return (
-    <button type="button" onClick={() => openDetail({ type: item.type, id: item.id })} className="group flex w-full shrink-0 items-end gap-1">
-      <span aria-hidden className="rank-outline select-none text-[5.5rem] font-black leading-[0.8] sm:text-[7rem]" style={{ WebkitTextStroke: "3px #6b6b6b" }}>
+    <button type="button" onClick={() => openDetail({ type: item.type, id: item.id })} className="group flex w-full shrink-0 items-end">
+      {/* The digit tucks BEHIND the poster (negative margin + poster z-10),
+       * exactly like Netflix's Top 10 rail — the pair reads as one set-piece. */}
+      <span aria-hidden className="rank-outline -mr-4 select-none font-display text-[6rem] font-black leading-[0.78] sm:-mr-5 sm:text-[8rem]">
         {rank}
       </span>
-      <div className="relative aspect-[2/3] w-24 shrink-0 overflow-hidden rounded-card bg-surface shadow-card transition duration-200 ease-out-quart group-hover:scale-105 hover:-translate-y-1 hover:shadow-lift sm:w-28">
+      <div className="relative z-10 aspect-[2/3] w-24 shrink-0 overflow-hidden rounded-card bg-surface shadow-card ring-1 ring-white/10 transition duration-200 ease-out-quart group-hover:-translate-y-1 group-hover:scale-105 group-hover:shadow-lift sm:w-28">
         {imageUrl ? (
           <Image src={imageUrl} alt={item.title} fill sizes="140px" className="object-cover" />
         ) : (

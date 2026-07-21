@@ -55,7 +55,7 @@ export function Row<T>({
 
   return (
     <section className="relative py-3">
-      <h2 className="mb-2 px-4 font-display text-lg font-semibold tracking-tight text-white md:px-12 md:text-xl">{title}</h2>
+      <h2 className="mb-2.5 px-4 font-display text-xl font-bold tracking-tight text-white md:px-12 md:text-[22px]">{title}</h2>
       <div className="group/row relative">
         {canLeft && (
           <button

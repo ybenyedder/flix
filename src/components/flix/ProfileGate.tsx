@@ -16,7 +16,7 @@ export function ProfileAvatar({ preset, name, size, interactive = false }: { pre
     <span
       className={
         "grid shrink-0 place-items-center overflow-hidden rounded-2xl font-black text-white " +
-        (interactive ? "size-28 ring-2 ring-transparent transition duration-200 ease-spring group-hover:scale-105 group-hover:ring-white/80 lg:size-36" : "")
+        (interactive ? "size-28 shadow-card ring-2 ring-transparent transition duration-200 ease-spring group-hover:scale-105 group-hover:shadow-lift group-hover:ring-white/80 lg:size-36" : "")
       }
       style={{ background: `linear-gradient(150deg, ${c0}, ${c1})`, width: size, height: size, fontSize: size ? size * 0.4 : undefined }}
     >
@@ -83,8 +83,19 @@ export function ProfileGate() {
 
   return (
     <div className="relative flex h-screen w-screen flex-col items-center justify-center overflow-hidden bg-background px-6">
+      {/* Faint ambient light so the gate reads as a lit stage rather than a
+       * void: one warm brand-red wash top-left, one cold blue answer bottom-
+       * right — same cinema vocabulary as the Home billboard's glow. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(55% 45% at 18% 8%, rgb(229 9 20 / 0.13), transparent 70%), radial-gradient(50% 42% at 85% 88%, rgb(76 66 255 / 0.09), transparent 70%)",
+        }}
+      />
       <div className="absolute left-6 top-6 lg:left-10 lg:top-8">
-        <span className="text-2xl font-black tracking-tight text-accent">FLIX</span>
+        <span className="font-display text-2xl font-black tracking-tighter text-brand-gradient">FLIX</span>
       </div>
 
       {!selected ? (

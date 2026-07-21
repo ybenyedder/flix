@@ -254,17 +254,23 @@ export function Header() {
         (scrolled || view !== "home" ? "glass border-b border-white/5" : "bg-gradient-to-b from-black/80 to-transparent")
       }
     >
-      <button type="button" onClick={() => navigate("home")} className="shrink-0 text-2xl font-display font-black tracking-tighter text-accent">
+      <button type="button" onClick={() => navigate("home")} className="shrink-0 font-display text-[26px] font-black tracking-tighter text-brand-gradient">
         FLIX
       </button>
 
-      <nav className="hidden gap-5 text-sm font-medium text-muted md:flex">
+      {/* 2026-style floating pill nav: the links live in their own glass
+       * capsule, the active view carried by a soft white highlight. */}
+      <nav className="hidden items-center gap-0.5 rounded-full glass p-1 md:flex">
         {NAV.map((item) => (
           <button
             key={item.id}
             type="button"
             onClick={() => navigate(item.id)}
-            className={"transition-colors hover:text-white " + (view === item.id ? "text-white" : "")}
+            aria-current={view === item.id ? "page" : undefined}
+            className={
+              "rounded-full px-4 py-1.5 text-sm font-medium transition-colors duration-200 " +
+              (view === item.id ? "bg-white/15 text-white" : "text-muted hover:bg-white/5 hover:text-white")
+            }
           >
             {item.label}
           </button>

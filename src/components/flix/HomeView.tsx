@@ -33,8 +33,11 @@ function keyOf(item: CatalogItem): string {
 }
 
 // One-time admin nudge to discover the opt-in *arr integration. Shown only to an
-// admin who hasn't enabled or dismissed it — hidden entirely otherwise.
-function ArrPromoBanner() {
+// admin who hasn't enabled or dismissed it — hidden entirely otherwise. The
+// caller owns the outer spacing: on a populated Home it slides in UNDER the
+// billboard (a banner above the hero broke the whole cinematic opening), on an
+// empty library it sits below the fixed header instead (`topOffset`).
+function ArrPromoBanner({ topOffset = false }: { topOffset?: boolean }) {
   const isAdmin = useProfileStore((s) => s.isAdmin);
   const enabled = useArrStore((s) => s.enabled);
   const dismissed = useArrStore((s) => s.dismissed);
@@ -45,8 +48,8 @@ function ArrPromoBanner() {
   if (!loaded || !isAdmin || enabled || dismissed) return null;
 
   return (
-    <div className="px-4 pt-20 md:px-12">
-      <div className="flex flex-col gap-3 rounded-panel border border-accent/30 bg-surface p-4 md:flex-row md:items-center md:justify-between">
+    <div className={"px-4 md:px-12 " + (topOffset ? "pt-20" : "")}>
+      <div className="glass flex flex-col gap-3 rounded-panel p-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-start gap-3">
           <DownloadCloud className="mt-0.5 size-6 shrink-0 text-accent" />
           <div>
@@ -57,10 +60,10 @@ function ArrPromoBanner() {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <button type="button" onClick={() => navigate("settings")} className="rounded-field bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover">
+          <button type="button" onClick={() => navigate("settings")} className="rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent-hover">
             Configurer
           </button>
-          <button type="button" onClick={() => void dismissBanner()} className="rounded-field px-3 py-1.5 text-xs text-muted hover:text-white">
+          <button type="button" onClick={() => void dismissBanner()} className="rounded-full px-3 py-1.5 text-xs text-muted transition-colors hover:text-white">
             Ignorer
           </button>
         </div>
@@ -168,7 +171,7 @@ export function HomeView() {
   if (status === "ready" && all.length === 0) {
     return (
       <div>
-        <ArrPromoBanner />
+        <ArrPromoBanner topOffset />
         <div className="flex min-h-screen flex-col items-center justify-center gap-2 px-6 text-center">
           <p className="text-lg font-semibold text-white">Bibliothèque vide</p>
           <p className="text-sm text-muted">Ajoutez des films ou des séries dans le dossier vidéo configuré, puis relancez une analyse.</p>
@@ -179,9 +182,9 @@ export function HomeView() {
 
   return (
     <div className="pb-20">
-      <ArrPromoBanner />
       {billboard ? <BillboardHero item={billboard} /> : <div className="h-24" />}
       <div className="relative z-10 -mt-16 space-y-8 stagger-children md:-mt-24">
+        <ArrPromoBanner />
         {continueWatching.length > 0 && (
           <Row
             title="Continuer à regarder"

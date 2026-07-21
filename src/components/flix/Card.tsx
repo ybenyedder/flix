@@ -147,14 +147,20 @@ function CardBase({ item }: { item: CatalogEntry }) {
     >
       <div className="relative aspect-[2/3] overflow-hidden rounded-card bg-surface ring-1 ring-white/5 transition-shadow duration-200 group-hover:shadow-lift group-hover:ring-2 group-hover:ring-white/25">
         {imageUrl ? (
-          <Image src={imageUrl} alt={item.title} fill sizes="(max-width: 768px) 30vw, 14vw" className="object-cover" />
+          <Image
+            src={imageUrl}
+            alt={item.title}
+            fill
+            sizes="(max-width: 768px) 30vw, 14vw"
+            className="object-cover transition-transform duration-300 ease-out-quart group-hover:scale-[1.06]"
+          />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-surface-hover to-surface p-3 text-center text-sm font-semibold text-muted">
             {item.title}
           </div>
         )}
-        {showNewBadge && <span className="absolute left-1.5 top-1.5 rounded bg-accent px-1.5 py-px text-[10px] font-bold text-white shadow">Nouveau</span>}
-        {label && <span className="absolute right-1.5 top-1.5 rounded bg-black/60 px-1.5 py-px text-[10px] font-bold text-white backdrop-blur-sm">{label}</span>}
+        {showNewBadge && <span className="absolute left-1.5 top-1.5 rounded-full bg-gradient-to-r from-accent to-[#ff4d55] px-2 py-px text-[10px] font-bold text-white shadow">Nouveau</span>}
+        {label && <span className="absolute right-1.5 top-1.5 rounded-full glass px-2 py-px text-[10px] font-bold text-white">{label}</span>}
       </div>
       {/* Title + meta ALWAYS visible under the cover (not only on hover). */}
       <div className="mt-1.5 px-0.5">

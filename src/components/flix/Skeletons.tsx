@@ -4,7 +4,7 @@
 
 export function SkeletonHero() {
   return (
-    <div className="relative h-[56vw] max-h-[80vh] min-h-[420px] w-full shimmer" aria-hidden>
+    <div className="relative h-[60vw] max-h-[85vh] min-h-[440px] w-full shimmer" aria-hidden>
       <div className="hero-fade-bottom absolute inset-0" />
     </div>
   );

@@ -20,7 +20,7 @@ export function MyListView() {
 
   return (
     <div className="min-h-screen px-4 pb-20 pt-24 md:px-12">
-      <h1 className="mb-6 font-display text-2xl font-semibold text-white">Ma liste</h1>
+      <h1 className="mb-6 font-display text-3xl font-bold tracking-tight text-white">Ma liste</h1>
       {items.length === 0 ? (
         <div className="card-surface animate-fade-up mx-auto mt-16 flex max-w-md flex-col items-center gap-4 rounded-dialog p-10 text-center">
           <p className="text-lg font-semibold text-white">Votre liste est vide</p>
