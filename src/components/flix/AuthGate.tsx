@@ -36,7 +36,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   if (!ready) {
     return (
       <div className="grid h-screen w-screen place-items-center bg-background">
-        <span className="text-2xl font-display font-black tracking-tight text-accent">FLIX</span>
+        <span className="animate-pulse font-display text-4xl font-black tracking-tighter text-brand-gradient">FLIX</span>
       </div>
     );
   }

@@ -25,12 +25,20 @@ export function Row<T>({
   const trackRef = useRef<HTMLDivElement>(null);
   const [canLeft, setCanLeft] = useState(false);
   const [canRight, setCanRight] = useState(false);
+  // Netflix's page indicator: one dash per viewport-width "page" of the rail,
+  // revealed on row hover. Derived from the same scroll/resize events as the
+  // chevrons.
+  const [pageCount, setPageCount] = useState(0);
+  const [pageIndex, setPageIndex] = useState(0);
 
   const updateArrows = useCallback(() => {
     const el = trackRef.current;
     if (!el) return;
     setCanLeft(el.scrollLeft > 4);
     setCanRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    const pages = el.clientWidth > 0 ? Math.ceil(el.scrollWidth / el.clientWidth) : 0;
+    setPageCount(pages);
+    setPageIndex(Math.max(0, Math.min(pages - 1, Math.round(el.scrollLeft / el.clientWidth))));
   }, []);
 
   useEffect(() => {
@@ -54,8 +62,17 @@ export function Row<T>({
   if (!items.length) return null;
 
   return (
-    <section className="relative py-3">
-      <h2 className="mb-2.5 px-4 font-display text-xl font-bold tracking-tight text-white md:px-12 md:text-[22px]">{title}</h2>
+    <section className="group/section relative py-3">
+      <div className="mb-2.5 flex items-end justify-between px-4 md:px-12">
+        <h2 className="font-display text-xl font-bold tracking-tight text-white md:text-[22px]">{title}</h2>
+        {pageCount > 1 && pageCount <= 15 && (
+          <div aria-hidden className="mb-1 hidden items-center gap-0.5 opacity-0 transition-opacity duration-300 group-hover/section:opacity-100 md:flex">
+            {Array.from({ length: pageCount }).map((_, i) => (
+              <span key={i} className={"h-0.5 w-3 rounded-full transition-colors " + (i === pageIndex ? "bg-white/80" : "bg-white/25")} />
+            ))}
+          </div>
+        )}
+      </div>
       <div className="group/row relative">
         {canLeft && (
           <button

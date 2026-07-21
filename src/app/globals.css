@@ -294,6 +294,24 @@ input[type="range"].volume-slider::-moz-range-progress {
   animation: var(--animate-fade-up);
 }
 
+/* Netflix card-expand: the hover overlay GROWS out of the poster tile it
+ * covers (top-centre origin, starting near the tile's own scale) instead of
+ * fading in from nowhere. Reserved for Card's portal overlay. */
+@keyframes flix-card-pop {
+  from {
+    opacity: 0.35;
+    transform: scale(0.72);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.card-pop {
+  animation: flix-card-pop 0.22s var(--ease-out-quart) backwards;
+  transform-origin: top center;
+}
+
 /* Entrance-only motion for popovers/dialogs (scale) and the upload dock (slide). */
 @keyframes flix-scale-in {
   from {

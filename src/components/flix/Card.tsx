@@ -243,7 +243,7 @@ function CardOverlay({ item, rect, inMyList, rating, watched, match, onMouseEnte
       // openDetail click handler.
       onClick={(e) => e.stopPropagation()}
       style={{ position: "fixed", top, left, width, zIndex: 60 }}
-      className="overflow-hidden rounded-panel bg-surface shadow-pop ring-1 ring-white/10 animate-scale-in"
+      className="card-pop overflow-hidden rounded-panel bg-surface shadow-pop ring-1 ring-white/10"
     >
       <div className="relative aspect-video w-full">
         {imageUrl ? (
