@@ -127,7 +127,7 @@ export function RequestsView() {
   return (
     <div className="min-h-screen px-4 pb-20 pt-24 md:px-12">
       <div className="mx-auto max-w-3xl">
-        <h1 className="mb-6 font-display text-2xl font-semibold text-white">Demandes</h1>
+        <h1 className="mb-6 font-display text-3xl font-bold tracking-tight text-white">Demandes</h1>
         {!enabled ? (
           <p className="text-sm text-muted">Les téléchargements automatiques sont désactivés.</p>
         ) : requests.length === 0 ? (

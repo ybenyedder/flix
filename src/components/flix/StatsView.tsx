@@ -67,7 +67,7 @@ export function StatsView() {
   return (
     <div className="min-h-screen px-4 pb-20 pt-24 md:px-12">
       <div className="mx-auto max-w-3xl">
-        <h1 className="mb-6 font-display text-2xl font-semibold text-white">Mon activité</h1>
+        <h1 className="mb-6 font-display text-3xl font-bold tracking-tight text-white">Mon activité</h1>
 
         {error && <p className="text-sm text-accent">{error}</p>}
         {!stats && !error && <p className="text-sm text-muted">Chargement…</p>}

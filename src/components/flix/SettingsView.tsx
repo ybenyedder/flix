@@ -144,7 +144,7 @@ export function SettingsView() {
     return (
       <div className="min-h-screen px-4 pb-20 pt-24 md:px-12">
         <div className="mx-auto max-w-3xl">
-          <h1 className="mb-6 font-display text-2xl font-semibold text-white">Paramètres</h1>
+          <h1 className="mb-6 font-display text-3xl font-bold tracking-tight text-white">Paramètres</h1>
           <p className="text-sm text-muted">Cette page est réservée à l&apos;administrateur.</p>
         </div>
       </div>

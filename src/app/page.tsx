@@ -11,6 +11,7 @@ import { useEffect } from "react";
 import dynamic from "next/dynamic";
 import { AuthGate } from "@/components/flix/AuthGate";
 import { Header } from "@/components/flix/Header";
+import { MobileNav } from "@/components/flix/MobileNav";
 import { HistoryManager } from "@/components/flix/HistoryManager";
 import { HomeView } from "@/components/flix/HomeView";
 import { BrowseView } from "@/components/flix/BrowseView";
@@ -69,6 +70,7 @@ function FlixShell() {
     <div className="min-h-screen bg-background">
       <HistoryManager />
       <Header />
+      <MobileNav />
       {view === "home" && <HomeView />}
       {view === "movies" && <BrowseView kind="movie" />}
       {view === "shows" && <BrowseView kind="show" />}
@@ -81,7 +83,8 @@ function FlixShell() {
       {playbackRequest && <PlayerView />}
       <UploadManager />
       {toast && (
-        <div role="status" aria-live="polite" className="glass fade-up fixed bottom-6 left-1/2 z-[70] -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium text-white shadow-pop">
+        // bottom-20 on mobile: clears the MobileNav tab bar.
+        <div role="status" aria-live="polite" className="glass fade-up fixed bottom-20 left-1/2 z-[70] -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium text-white shadow-pop md:bottom-6">
           {toast}
         </div>
       )}
