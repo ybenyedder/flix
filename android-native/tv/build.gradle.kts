@@ -105,6 +105,9 @@ dependencies {
     // CircularProgressIndicator; every other visible component in :tv comes
     // from androidx.tv.material3 below.
     implementation("androidx.compose.material3:material3:1.5.0-alpha08")
+    // Nav-rail glyphs (Home/Tv/Movie/Add) — same pinned version as :app, the
+    // artifact is icon data only so mixing with compose 1.9.1 is safe.
+    implementation("androidx.compose.material:material-icons-extended:1.7.8")
     // Compose for TV — Material Design components adapted for D-pad focus
     // (Surface/Card focus scale+glow, TV ColorScheme/Typography). Not present
     // in the offline cache (network-resolved once, like npm installs were for

@@ -33,6 +33,11 @@ import local.flix.core.playback.PlayerHolder
 
 enum class TvPhase { BOOT, CONNECT, PROFILES, LOGIN, LOADING, HOME, ERROR }
 
+/** Netflix-style sections reachable from the left nav rail. HOME mixes
+ *  movies+shows (reco rows); SERIES/MOVIES are per-type browse pages built
+ *  client-side from the library snapshot (genre rows). */
+enum class TvTab { HOME, SERIES, MOVIES, MY_LIST }
+
 sealed interface TvScreen {
     data object Home : TvScreen
     data class Detail(val type: String, val id: Int) : TvScreen
@@ -59,6 +64,10 @@ data class TvUiState(
 
     val screen: TvScreen = TvScreen.Home,
     val backStack: List<TvScreen> = emptyList(),
+    // Lives in the ViewModel (not remember{}) so the selected section survives
+    // a round-trip through Detail/Player — Netflix lands you back on the tab
+    // you left, not on Accueil.
+    val tab: TvTab = TvTab.HOME,
 
     val movieDetails: Map<Int, MovieDetail> = emptyMap(),
     val showDetails: Map<Int, ShowDetail> = emptyMap(),
@@ -210,9 +219,21 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(backStack = it.backStack + it.screen, screen = screen) }
     }
 
+    fun selectTab(tab: TvTab) {
+        _ui.update { it.copy(tab = tab) }
+    }
+
     fun back(): Boolean {
         val stack = _ui.value.backStack
-        if (stack.isEmpty()) return false
+        if (stack.isEmpty()) {
+            // Netflix behaviour: BACK from a section returns to Accueil first;
+            // only a second BACK actually leaves the app.
+            if (_ui.value.screen is TvScreen.Home && _ui.value.tab != TvTab.HOME) {
+                _ui.update { it.copy(tab = TvTab.HOME) }
+                return true
+            }
+            return false
+        }
         _ui.update { it.copy(screen = stack.last(), backStack = stack.dropLast(1)) }
         return true
     }
