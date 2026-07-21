@@ -78,5 +78,12 @@ export async function POST(request: Request) {
     setArrDismissed(body.dismissed);
   }
 
+  // Turning the feature on (or pointing it at an instance) should surface the
+  // real key art without waiting for the next library scan — fire the
+  // enrichment pass now. Self-gating + single-flight + never throws.
+  if (isArrEnabled() && (body.enabled === true || body.services !== undefined)) {
+    void import("@/server/arr/artwork").then((m) => m.runArtworkPass()).catch(() => {/* best effort */});
+  }
+
   return noStore(json(arrConfigPayload()));
 }

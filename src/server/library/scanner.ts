@@ -240,12 +240,17 @@ export async function runScan(): Promise<ScanProgress> {
 
     // Fire-and-forget background image extraction (Phase 3). Dynamically
     // imported to avoid a load cycle and to no-op cleanly before that phase exists.
-    // The trickplay sprite pass (FLIX_TRICKPLAY, off by default) is CHAINED
-    // after it rather than fired alongside, so the two background ffmpeg
-    // consumers never run at the same time — and an images-pass failure still
-    // lets trickplay proceed. Both stay best-effort: neither can fail the scan.
+    // The arr artwork enrichment (opt-in, self-gating) is CHAINED after it so
+    // it sees final frame-extracted hashes, and the trickplay sprite pass
+    // (FLIX_TRICKPLAY, off by default) after that, so the two background
+    // ffmpeg consumers never run at the same time — and an earlier failure
+    // still lets the next stage proceed. All stay best-effort: none can fail
+    // the scan.
     void import("./imagesPass")
       .then((m) => m.runImagesPass())
+      .catch(() => {/* best effort */})
+      .then(() => import("../arr/artwork"))
+      .then((m) => m.runArtworkPass())
       .catch(() => {/* best effort */})
       .then(() => import("./trickplay"))
       .then((m) => m.runTrickplayPass())
