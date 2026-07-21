@@ -145,35 +145,36 @@ class PlayerHolder(private val context: Context) {
 
     fun stop() { controller?.stop() }
 
-    /** Selects one audio track group by its embedded-language/group index —
+    /** Selects one audio track group, already resolved BY IDENTITY against the
+     *  live tracks (see TrackSelection.resolveAudioGroup — never an ordinal) —
      *  used for DIRECT play, where the container itself carries every audio
      *  track and ExoPlayer can switch instantly with no re-buffer. HLS
      *  (remux/transcode) sessions instead re-request a new session with the
      *  desired `audioIdx`, since the server only muxes ONE audio track in. */
-    fun selectAudioGroup(groupIndex: Int) {
+    fun selectAudioTrack(group: Tracks.Group) {
         val c = controller ?: return
-        val group = c.currentTracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }.getOrNull(groupIndex) ?: return
         c.trackSelectionParameters = c.trackSelectionParameters.buildUpon()
             .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
             .build()
     }
 
-    /** Enables/disables the embedded text track group at [groupIndex], or
-     *  clears all text overrides when null (subtitles off). */
-    fun selectTextGroup(groupIndex: Int?) {
+    /** Shows exactly the given text group (resolved by identity — see
+     *  TrackSelection.resolveTextGroup), or turns text rendering off entirely
+     *  when null ("Désactivés", or a burn-in sub that lives in the video
+     *  pixels). Stale overrides are cleared first so a group from a previous
+     *  session/item can never linger, and the type-level disable is lifted in
+     *  the SAME parameters build — two separate assignments would let the
+     *  selector run once with an enabled type but no override, flashing
+     *  whatever default track it likes. */
+    fun selectTextTrack(group: Tracks.Group?) {
         val c = controller ?: return
-        val builder = c.trackSelectionParameters.buildUpon()
-        val textGroups = c.currentTracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
-        for (g in textGroups) builder.clearOverridesOfType(C.TRACK_TYPE_TEXT)
-        if (groupIndex != null) {
-            val group = textGroups.getOrNull(groupIndex)
-            if (group != null) builder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
+        val builder = c.trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_TEXT)
+        if (group != null) {
+            builder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
+            builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
         } else {
             builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
         }
         c.trackSelectionParameters = builder.build()
-        if (groupIndex != null) {
-            c.trackSelectionParameters = c.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
-        }
     }
 }

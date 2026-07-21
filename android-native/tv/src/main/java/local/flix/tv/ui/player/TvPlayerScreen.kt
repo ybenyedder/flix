@@ -4,6 +4,8 @@ import android.net.Uri
 import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -33,7 +35,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
@@ -50,11 +54,18 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import local.flix.core.caps.ClientCaps
 import local.flix.core.caps.NativeCaps
+import local.flix.core.model.DecisionAudioTrack
+import local.flix.core.model.DecisionSubtitle
 import local.flix.core.model.EpisodeDetail
 import local.flix.core.model.MediaFileInfo
+import local.flix.core.model.PlayDecision
 import local.flix.core.model.PlaySession
 import local.flix.core.model.flattenEpisodes
+import local.flix.core.playback.resolveAudioGroup
+import local.flix.core.playback.resolveTextGroup
+import local.flix.core.playback.subtitleFormatId
 import local.flix.tv.ui.TvScreen
 import local.flix.tv.ui.TvUiState
 import local.flix.tv.ui.TvViewModel
@@ -93,8 +104,21 @@ fun TvPlayerScreen(vm: TvViewModel, ui: TvUiState, screen: TvScreen.Player) {
     // the next tick. Reset per `screen` — the next episode gets its own offer.
     var nextUpDismissed by remember(screen) { mutableStateOf(false) }
     var advanced by remember(screen) { mutableStateOf(false) }
+    // Track menu state. `decision` carries the server's track lists (the web
+    // player's PlayerView does the same decide-then-session dance); the
+    // selections are OUR single source of truth — media3's own selection state
+    // is re-derived from them (see the enforcement effect below) because it
+    // resets on every session rebuild. `selectedAudioIdx` is the ffprobe
+    // stream_index the server contract speaks (never a media3 ordinal);
+    // `selectedSubId` is a subtitles.id, null = « Désactivés ».
+    var caps by remember(screen) { mutableStateOf<ClientCaps?>(null) }
+    var decision by remember(screen) { mutableStateOf<PlayDecision?>(null) }
+    var showTracks by remember(screen) { mutableStateOf(false) }
+    var selectedAudioIdx by remember(screen) { mutableStateOf<Int?>(null) }
+    var selectedSubId by remember(screen) { mutableStateOf<Int?>(null) }
     val playPauseFocus = remember { FocusRequester() }
     val nextUpPlayFocus = remember { FocusRequester() }
+    val tracksFirstFocus = remember { FocusRequester() }
     // Auto-hide: controls show on any D-pad key and fade after a few seconds of
     // inactivity while playing. `interactions` bumps on every key so the
     // hide-timer effect restarts (cancelling the previous delay) — no wall
@@ -102,10 +126,70 @@ fun TvPlayerScreen(vm: TvViewModel, ui: TvUiState, screen: TvScreen.Player) {
     var controlsVisible by remember(screen) { mutableStateOf(true) }
     var interactions by remember(screen) { mutableStateOf(0) }
 
+    /** Media item for a fresh session. Every NON-burn-in subtitle (embedded
+     *  text AND external sidecars) is sideloaded from /api/subs/<id> — the
+     *  server extracts/converts to WebVTT lazily, exactly what the web player
+     *  feeds its <track> element — with a STABLE format id so selection can
+     *  resolve it by identity (TrackSelection.kt). This works identically for
+     *  direct play and HLS: the session playlist is a full static VOD starting
+     *  at 0 (hlsArgs.ts), so sideloaded cue times always line up. Burn-in
+     *  (bitmap) subs can't be text tracks at all; they ride in `subtitleId`
+     *  on session creation instead. */
+    fun buildMediaItem(session: PlaySession, dec: PlayDecision?): MediaItem {
+        val sideloaded = dec?.subtitles.orEmpty()
+            .filter { !it.requiresBurnIn }
+            .map { s ->
+                MediaItem.SubtitleConfiguration.Builder(Uri.parse(vm.api.subtitleUrl(s.id)))
+                    .setId(subtitleFormatId(s.id))
+                    .setMimeType(MimeTypes.TEXT_VTT)
+                    .setLanguage(s.language)
+                    .setLabel(s.title ?: s.language)
+                    .build()
+            }
+        return when (session) {
+            is PlaySession.Direct -> MediaItem.Builder()
+                .setUri(Uri.parse(vm.api.absoluteUrl(session.url)))
+                .setSubtitleConfigurations(sideloaded)
+                .build()
+            is PlaySession.Hls -> MediaItem.Builder()
+                .setUri(Uri.parse(vm.api.absoluteUrl(session.playlistUrl)))
+                .setMimeType(MimeTypes.APPLICATION_M3U8)
+                .setSubtitleConfigurations(sideloaded)
+                .build()
+        }
+    }
+
+    /** Create (or re-create, on a track change) the playback session for the
+     *  CURRENT selections and start playing at [startMs]. The mode is decided
+     *  server-side from fileId/caps/audioIdx/subtitleId — never here (a
+     *  non-default audio pick may turn direct into remux, a burn-in sub into
+     *  transcode; the direct > remux > transcode order is the server's law).
+     *  The previous HLS session is ended explicitly first — the server would
+     *  also replace it on the same deviceId, but only once the create request
+     *  lands, and an orphaned ffmpeg otherwise idles until the reaper. */
+    suspend fun startPlayback(startMs: Long) {
+        val t = target ?: return
+        val c = caps ?: return
+        loading = true
+        activeSession?.let { vm.endPlaySession(it.sessionId) }
+        activeSession = null
+        val burnInId = decision?.subtitles?.firstOrNull { it.id == selectedSubId && it.requiresBurnIn }?.id
+        val session = vm.api.createSession(t.file.id, c, audioIdx = selectedAudioIdx, subtitleId = burnInId, deviceId = "android-tv")
+        if (session == null) {
+            error = "Le serveur n'a pas pu préparer la lecture."
+            loading = false
+            return
+        }
+        if (session is PlaySession.Hls) activeSession = session
+        vm.player.playItem(buildMediaItem(session, decision), startPositionMs = startMs)
+        loading = false
+    }
+
     LaunchedEffect(screen) {
         loading = true
         error = null
-        val caps = NativeCaps.build(context)
+        val builtCaps = NativeCaps.build(context)
+        caps = builtCaps
         val resolved: TvPlayTarget? = if (screen.type == "movie") {
             val detail = ui.movieDetails[screen.id] ?: vm.api.movieDetail(screen.id)
             val file = detail?.files?.firstOrNull()
@@ -129,22 +213,32 @@ fun TvPlayerScreen(vm: TvViewModel, ui: TvUiState, screen: TvScreen.Player) {
             return@LaunchedEffect
         }
         target = resolved
-        val session = vm.api.createSession(resolved.file.id, caps, deviceId = "android-tv")
-        if (session == null) {
-            error = "Le serveur n'a pas pu préparer la lecture."
-            loading = false
-            return@LaunchedEffect
-        }
-        val mediaItem = when (session) {
-            is PlaySession.Direct -> MediaItem.Builder().setUri(Uri.parse(vm.api.absoluteUrl(session.url))).build()
-            is PlaySession.Hls -> {
-                activeSession = session
-                MediaItem.Builder().setUri(Uri.parse(vm.api.absoluteUrl(session.playlistUrl))).setMimeType(MimeTypes.APPLICATION_M3U8).build()
-            }
-        }
-        vm.player.playItem(mediaItem, startPositionMs = resolved.resumeMs)
-        loading = false
+        // Ask for the decision first: it carries the track lists AND the
+        // per-profile language preselections (audioStreamIndex/subtitleId).
+        // Feeding its resolved audio index back into the session — like the
+        // web does — keeps the session and the menu's notion of "current"
+        // agreeing even when a preference picked a non-default track. A null
+        // decision (older server?) still plays; the menu just stays hidden.
+        val dec = vm.api.decidePlay(resolved.file.id, builtCaps)
+        decision = dec
+        selectedAudioIdx = dec?.audioStreamIndex
+        selectedSubId = dec?.subtitleId
+        startPlayback(resolved.resumeMs)
         runCatching { playPauseFocus.requestFocus() }
+    }
+
+    // Enforce the CURRENT subtitle choice on whatever text groups media3
+    // exposes right now, resolved by identity (stable sideload id) — never by
+    // ordinal. Keyed on the live Tracks so it re-asserts itself after every
+    // session rebuild and whenever sideloads (re)appear; everything not chosen
+    // is kept off, exactly like the web forces every non-active <track> to
+    // "disabled". A burn-in pick resolves to no text group and correctly
+    // lands on selectTextTrack(null): the subtitle is in the video pixels.
+    val snapshot by vm.player.snapshot.collectAsState()
+    LaunchedEffect(snapshot.tracks, selectedSubId, decision) {
+        val dec = decision ?: return@LaunchedEffect
+        val sub = dec.subtitles.firstOrNull { it.id == selectedSubId && !it.requiresBurnIn }
+        vm.player.selectTextTrack(sub?.let { resolveTextGroup(snapshot.tracks, it) })
     }
 
     LaunchedEffect(screen) {
@@ -186,7 +280,6 @@ fun TvPlayerScreen(vm: TvViewModel, ui: TvUiState, screen: TvScreen.Player) {
         }
     }
 
-    val snapshot by vm.player.snapshot.collectAsState()
     // Runtime playback failures previously sat unread in the snapshot: frozen
     // frame, no message. Share the setup-error overlay.
     val shownError = error ?: snapshot.playerError
@@ -202,8 +295,34 @@ fun TvPlayerScreen(vm: TvViewModel, ui: TvUiState, screen: TvScreen.Player) {
     }
     val overlayAlpha by androidx.compose.animation.core.animateFloatAsState(if (controlsVisible) 1f else 0f, label = "controls")
 
+    // Hand the focus back to the transport when the tracks panel closes. The
+    // transport layer is NOT composed while the panel is up (that is the focus
+    // trap — invisible-but-focusable transport buttons would otherwise catch a
+    // stray D-pad move), so the restore has to wait for it to be back in the
+    // tree: an effect keyed on (showTracks, loading) runs after recomposition
+    // has re-attached playPauseFocus, and re-runs once a pick-triggered
+    // session rebuild finishes (the transport is also gated on !loading).
+    var tracksWasOpen by remember(screen) { mutableStateOf(false) }
+    LaunchedEffect(showTracks, loading) {
+        if (showTracks) {
+            tracksWasOpen = true
+        } else if (tracksWasOpen && !loading) {
+            tracksWasOpen = false
+            runCatching { playPauseFocus.requestFocus() }
+        }
+    }
+
     Box(
         Modifier.fillMaxSize().background(Color.Black).onPreviewKeyEvent { e ->
+            // BACK closes the tracks panel — and only the panel. It must be
+            // eaten HERE, in the preview pass: unhandled BACKs bubble up to
+            // TvActivity.onBackPressed, which pops the whole player off the
+            // nav stack. Consuming the DOWN also keeps the activity from ever
+            // starting its back-tracking, so the later UP can't re-trigger it.
+            if (showTracks && e.key == Key.Back) {
+                if (e.type == KeyEventType.KeyDown) showTracks = false
+                return@onPreviewKeyEvent true
+            }
             if (e.type == KeyEventType.KeyDown) {
                 val wasHidden = !controlsVisible
                 controlsVisible = true
@@ -211,10 +330,10 @@ fun TvPlayerScreen(vm: TvViewModel, ui: TvUiState, screen: TvScreen.Player) {
                 // Swallow only the FIRST key that wakes the controls, so it
                 // reveals them instead of also triggering the focused button —
                 // and only while the transport layer is the active one: the
-                // error and next-up overlays render fully visible regardless of
-                // controlsVisible, so eating their first OK/BACK press would
-                // force the user to press every button twice.
-                val transportActive = shownError == null && !loading && !(nextUpVisible && !advanced)
+                // error, next-up and tracks overlays render fully visible
+                // regardless of controlsVisible, so eating their first OK/BACK
+                // press would force the user to press every button twice.
+                val transportActive = shownError == null && !loading && !(nextUpVisible && !advanced) && !showTracks
                 wasHidden && transportActive
             } else {
                 false
@@ -248,10 +367,11 @@ fun TvPlayerScreen(vm: TvViewModel, ui: TvUiState, screen: TvScreen.Player) {
             }
         }
 
-        if (shownError == null && !loading) {
+        if (shownError == null && !loading && !showTracks) {
             // Whole control layer fades together. Kept in composition (buttons
             // stay focusable) even at alpha 0 so a key press can be caught to
-            // reveal them.
+            // reveal them — but dropped entirely while the tracks panel is up,
+            // which is what keeps D-pad focus from escaping the panel.
             Box(Modifier.fillMaxSize().alpha(overlayAlpha)) {
                 // Bottom cinematic scrim so white controls read over any frame.
                 Box(
@@ -285,6 +405,12 @@ fun TvPlayerScreen(vm: TvViewModel, ui: TvUiState, screen: TvScreen.Player) {
                             big = true,
                         )
                         TvCtrlButton("⏩", onClick = { vm.player.seekBy(10_000L) })
+                        // Same availability rule as the web's TrackMenu button:
+                        // an actual audio choice, or at least one subtitle.
+                        val dec = decision
+                        if (dec != null && (dec.audioTracks.size > 1 || dec.subtitles.isNotEmpty())) {
+                            TvCtrlButton("💬", onClick = { showTracks = true; interactions++ })
+                        }
                     }
                 }
             }
@@ -320,6 +446,61 @@ fun TvPlayerScreen(vm: TvViewModel, ui: TvUiState, screen: TvScreen.Player) {
                         )
                     }
                 }
+            }
+        }
+
+        val dec = decision
+        if (showTracks && dec != null) {
+            // Same focus-steal pattern as the next-up overlay: grab the D-pad
+            // on open (the transport layer is un-composed meanwhile), hand it
+            // back through the tracksWasOpen effect on close.
+            LaunchedEffect(Unit) { runCatching { tracksFirstFocus.requestFocus() } }
+            Box(
+                Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).padding(40.dp),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                TvTrackPanel(
+                    decision = dec,
+                    selectedAudioIdx = selectedAudioIdx,
+                    selectedSubId = selectedSubId,
+                    firstFocus = tracksFirstFocus,
+                    onSelectAudio = { t ->
+                        showTracks = false
+                        if (t.streamIndex != selectedAudioIdx) {
+                            selectedAudioIdx = t.streamIndex
+                            // DIRECT play carries every audio track in the
+                            // container, so a supported, unambiguously-resolved
+                            // pick switches instantly client-side and KEEPS
+                            // direct play (the web can't do this — it always
+                            // rebuilds into a remux). Everything else — HLS
+                            // (the server muxes exactly one audio track in),
+                            // an unsupported codec, an ambiguous language
+                            // match — goes back to the server by stream index:
+                            // end session, recreate with audioIdx, resume at
+                            // the current position. Never an ordinal pick.
+                            val group = if (activeSession == null && t.supported) resolveAudioGroup(snapshot.tracks, t) else null
+                            if (group != null) vm.player.selectAudioTrack(group)
+                            else scope.launch { startPlayback(vm.player.positionMs()) }
+                        }
+                    },
+                    onSelectSubtitle = { s ->
+                        showTracks = false
+                        if (s?.id != selectedSubId) {
+                            // A burn-in sub only exists as pixels ffmpeg renders
+                            // into the video: entering OR leaving one changes
+                            // what the server must encode, so the session is
+                            // recreated (web parity — its pipeline rebuilds on
+                            // burnInSubtitleId changes). Text picks cost
+                            // nothing: the enforcement effect re-resolves the
+                            // sideloaded group from selectedSubId.
+                            val hadBurnIn = dec.subtitles.any { it.id == selectedSubId && it.requiresBurnIn }
+                            selectedSubId = s?.id
+                            if (s?.requiresBurnIn == true || hadBurnIn) {
+                                scope.launch { startPlayback(vm.player.positionMs()) }
+                            }
+                        }
+                    },
+                )
             }
         }
     }
@@ -370,4 +551,111 @@ private fun TvPillButton(label: String, onClick: () -> Unit, emphasized: Boolean
     ) {
         Text(label, color = if (emphasized) colors.background else Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 20.dp, vertical = 11.dp))
     }
+}
+
+/** Audio + subtitle picker, right-aligned over the player. Selecting only
+ *  REPORTS the pick to the screen — this panel has no idea whether it costs a
+ *  client-side switch or a whole session rebuild (same contract as the web's
+ *  TrackMenu). Labels mirror the web's: title > LANG > fallback, « ·N.0 »
+ *  channels, « (transcodage) » for unsupported audio, « ·SME » / « (incrustés) »
+ *  for SDH / burn-in subs. Initial focus lands on the CURRENT selection, so
+ *  BACK-out-without-change is a zero-cost round trip. */
+@Composable
+private fun TvTrackPanel(
+    decision: PlayDecision,
+    selectedAudioIdx: Int?,
+    selectedSubId: Int?,
+    firstFocus: FocusRequester,
+    onSelectAudio: (DecisionAudioTrack) -> Unit,
+    onSelectSubtitle: (DecisionSubtitle?) -> Unit,
+) {
+    val colors = LocalFlixTvColors.current
+    val showAudio = decision.audioTracks.size > 1
+    val showSubs = decision.subtitles.isNotEmpty()
+    Row(
+        // Same container language as the next-up overlay: colors.surface on a
+        // RoundedCornerShape (tv-material Surfaces are used for the focusable
+        // rows themselves).
+        Modifier.background(colors.surface, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 22.dp).width(if (showAudio && showSubs) 600.dp else 320.dp),
+    ) {
+        if (showAudio) {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp)) {
+                Text("Audio", color = colors.textMuted, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(10.dp))
+                decision.audioTracks.forEach { t ->
+                    val selected = t.streamIndex == selectedAudioIdx
+                    TvTrackRow(
+                        label = audioTrackLabel(t),
+                        selected = selected,
+                        onClick = { onSelectAudio(t) },
+                        // The audio column owns the initial focus when shown;
+                        // `selected` matches exactly one row (stream_index is
+                        // unique and audioStreamIndex is one of them).
+                        modifier = if (selected) Modifier.focusRequester(firstFocus) else Modifier,
+                    )
+                }
+            }
+        }
+        if (showSubs) {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp)) {
+                Text("Sous-titres", color = colors.textMuted, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(10.dp))
+                val offSelected = selectedSubId == null || decision.subtitles.none { it.id == selectedSubId }
+                TvTrackRow(
+                    label = "Désactivés",
+                    selected = offSelected,
+                    onClick = { onSelectSubtitle(null) },
+                    modifier = if (!showAudio && offSelected) Modifier.focusRequester(firstFocus) else Modifier,
+                )
+                decision.subtitles.forEach { s ->
+                    val selected = s.id == selectedSubId
+                    TvTrackRow(
+                        label = subtitleTrackLabel(s),
+                        selected = selected,
+                        onClick = { onSelectSubtitle(s) },
+                        modifier = if (!showAudio && selected) Modifier.focusRequester(firstFocus) else Modifier,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** One focusable row of the tracks panel: check slot + label. */
+@Composable
+private fun TvTrackRow(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = LocalFlixTvColors.current
+    Surface(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(8.dp)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (selected) colors.chip else Color.Transparent,
+            focusedContainerColor = colors.accent,
+        ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
+    ) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(22.dp)) {
+                if (selected) Text("✓", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+            Text(label, color = Color.White, fontSize = 14.sp, maxLines = 1)
+        }
+    }
+}
+
+// French labels, mirroring the web TrackMenu's trackLabel() + suffixes.
+private fun baseTrackLabel(language: String?, title: String?, fallback: String): String =
+    title ?: language?.uppercase() ?: fallback
+
+private fun audioTrackLabel(t: DecisionAudioTrack): String = buildString {
+    append(baseTrackLabel(t.language, t.title, "Piste ${t.streamIndex}"))
+    t.channels?.let { append(" · ${it}.0") }
+    if (!t.supported) append(" (transcodage)")
+}
+
+private fun subtitleTrackLabel(s: DecisionSubtitle): String = buildString {
+    append(baseTrackLabel(s.language, s.title, "Piste ${s.id}"))
+    if (s.isSdh) append(" · SME")
+    if (s.requiresBurnIn) append(" (incrustés)")
 }

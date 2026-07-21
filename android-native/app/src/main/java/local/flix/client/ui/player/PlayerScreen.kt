@@ -46,11 +46,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
-import androidx.media3.common.Player
-import androidx.media3.common.Tracks
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -58,6 +55,7 @@ import local.flix.client.ui.AppViewModel
 import local.flix.client.ui.Screen
 import local.flix.client.ui.UiState
 import local.flix.client.ui.components.formatClock
+import local.flix.core.caps.ClientCaps
 import local.flix.core.caps.NativeCaps
 import local.flix.core.model.DecisionAudioTrack
 import local.flix.core.model.DecisionSubtitle
@@ -67,6 +65,9 @@ import local.flix.core.model.PlayDecision
 import local.flix.core.model.PlaySession
 import local.flix.core.model.ShowDetail
 import local.flix.core.model.flattenEpisodes
+import local.flix.core.playback.resolveAudioGroup
+import local.flix.core.playback.resolveTextGroup
+import local.flix.core.playback.subtitleFormatId
 
 private data class PlayTarget(
     val itemType: String, // movie|episode (progress granularity)
@@ -94,6 +95,76 @@ fun PlayerScreen(vm: AppViewModel, ui: UiState, screen: Screen.Player) {
     var showTracks by remember { mutableStateOf(false) }
     var nextUpVisible by remember(screen) { mutableStateOf(false) }
     var advanced by remember(screen) { mutableStateOf(false) }
+    // Kept for session re-creation on a track switch: caps to re-POST, the
+    // current audio pick as the ffprobe stream_index the server contract
+    // speaks (never a media3 ordinal), and the subtitle pick as a
+    // subtitles.id (null = « Désactivés »). Both are OUR single source of
+    // truth — media3's own selection state resets on every session rebuild
+    // and is re-derived from these (see the enforcement effect below). Same
+    // model as the TV player.
+    var caps by remember(screen) { mutableStateOf<ClientCaps?>(null) }
+    var selectedAudioIdx by remember(screen) { mutableStateOf<Int?>(null) }
+    var selectedSubId by remember(screen) { mutableStateOf<Int?>(null) }
+
+    /** Media item for a session. Every NON-burn-in subtitle (embedded text
+     *  AND external sidecars) is sideloaded from /api/subs/{id} — the server
+     *  extracts/converts to WebVTT lazily, exactly what the web player feeds
+     *  its <track> element. Embedded tracks are included because an HLS
+     *  session does not mux text at all — without the sideload they simply
+     *  don't exist client-side. Each gets a STABLE id so selection can match
+     *  it back to the right media3 text group (TrackSelection.kt); cue times
+     *  always line up since HLS playlists are full static VOD starting at 0.
+     *  Bitmap subs (requiresBurnIn) can't be text tracks; they ride in
+     *  `subtitleId` on session creation instead. */
+    fun buildMediaItem(session: PlaySession, dec: PlayDecision?): MediaItem {
+        val sideloaded = dec?.subtitles.orEmpty()
+            .filter { !it.requiresBurnIn }
+            .map { s ->
+                MediaItem.SubtitleConfiguration.Builder(Uri.parse(vm.api.subtitleUrl(s.id)))
+                    .setId(subtitleFormatId(s.id))
+                    .setMimeType(MimeTypes.TEXT_VTT)
+                    .setLanguage(s.language)
+                    .setLabel(s.title ?: s.language)
+                    .build()
+            }
+        return when (session) {
+            is PlaySession.Direct -> MediaItem.Builder()
+                .setUri(Uri.parse(vm.api.absoluteUrl(session.url)))
+                .setSubtitleConfigurations(sideloaded)
+                .build()
+            is PlaySession.Hls -> MediaItem.Builder()
+                .setUri(Uri.parse(vm.api.absoluteUrl(session.playlistUrl)))
+                .setMimeType(MimeTypes.APPLICATION_M3U8)
+                .setSubtitleConfigurations(sideloaded)
+                .build()
+        }
+    }
+
+    /** Create (or re-create, on a track change) the playback session for the
+     *  CURRENT selections and start playing at [startMs]. The mode is decided
+     *  server-side from fileId/caps/audioIdx/subtitleId — never here (a
+     *  non-default audio pick may turn direct into remux, a burn-in sub into
+     *  transcode; the direct > remux > transcode order is the server's law).
+     *  The previous HLS session is ended explicitly first — the server would
+     *  also replace it on the same deviceId, but only once the create request
+     *  lands, and an orphaned ffmpeg otherwise idles until the reaper. */
+    suspend fun startPlayback(startMs: Long) {
+        val t = target ?: return
+        val c = caps ?: return
+        loading = true
+        activeSession?.let { vm.endPlaySession(it.sessionId) }
+        activeSession = null
+        val burnInId = decision?.subtitles?.firstOrNull { it.id == selectedSubId && it.requiresBurnIn }?.id
+        val session = vm.api.createSession(t.file.id, c, audioIdx = selectedAudioIdx, subtitleId = burnInId, deviceId = "android-mobile")
+        if (session == null) {
+            error = "Le serveur n'a pas pu préparer la lecture."
+            loading = false
+            return
+        }
+        if (session is PlaySession.Hls) activeSession = session
+        vm.player.playItem(buildMediaItem(session, decision), startPositionMs = startMs)
+        loading = false
+    }
 
     // Resolve what to play from the nav args, load its media file + episode
     // context, then run the same decide-then-create-session flow the web
@@ -101,7 +172,8 @@ fun PlayerScreen(vm: AppViewModel, ui: UiState, screen: Screen.Player) {
     LaunchedEffect(screen) {
         loading = true
         error = null
-        val caps = NativeCaps.build(context)
+        val builtCaps = NativeCaps.build(context)
+        caps = builtCaps
         val resolved: PlayTarget? = if (screen.type == "movie") {
             val detail = ui.movieDetails[screen.id] ?: vm.api.movieDetail(screen.id)
             val file = detail?.files?.firstOrNull()
@@ -133,49 +205,32 @@ fun PlayerScreen(vm: AppViewModel, ui: UiState, screen: Screen.Player) {
         }
         target = resolved
 
-        val dec = vm.api.decidePlay(resolved.file.id, caps)
-        val session = vm.api.createSession(resolved.file.id, caps, deviceId = "android-mobile")
-        if (dec == null || session == null) {
-            error = "Le serveur n'a pas pu préparer la lecture."
-            loading = false
-            return@LaunchedEffect
-        }
+        // Ask for the decision first: it carries the track lists AND the
+        // per-profile language preselections (audioStreamIndex/subtitleId).
+        // Feeding its resolved audio index back into the session — like the
+        // web does — keeps the session and the menu's notion of "current"
+        // agreeing even when a preference picked a non-default track. A null
+        // decision (older server?) still plays; the menu just stays hidden.
+        val dec = vm.api.decidePlay(resolved.file.id, builtCaps)
         decision = dec
+        selectedAudioIdx = dec?.audioStreamIndex
+        selectedSubId = dec?.subtitleId
+        startPlayback(resolved.resumeMs)
+    }
 
-        // External subtitles are separate sidecar files (/api/subs/{id}, always
-        // served as WebVTT) — unlike embedded/HLS tracks they live OUTSIDE the
-        // media container, so ExoPlayer never exposes them unless we sideload them
-        // here. Each gets a STABLE id so track selection can match it back to the
-        // right media3 text group (see resolveTextGroupIndex); previously the raw
-        // server-list ordinal was fed to media3, so external subs never rendered.
-        // Bitmap subs (requiresBurnIn) can't be served as text, so they're skipped.
-        val externalSubs = dec.subtitles
-            .filter { it.source == "external" && !it.requiresBurnIn }
-            .map { s ->
-                MediaItem.SubtitleConfiguration.Builder(Uri.parse(vm.api.subtitleUrl(s.id)))
-                    .setId("flix-sub-${s.id}")
-                    .setMimeType(MimeTypes.TEXT_VTT)
-                    .setLanguage(s.language)
-                    .setLabel(s.title ?: s.language)
-                    .build()
-            }
+    val snapshot by vm.player.snapshot.collectAsState()
 
-        val mediaItem = when (session) {
-            is PlaySession.Direct -> MediaItem.Builder()
-                .setUri(Uri.parse(vm.api.absoluteUrl(session.url)))
-                .setSubtitleConfigurations(externalSubs)
-                .build()
-            is PlaySession.Hls -> {
-                activeSession = session
-                MediaItem.Builder()
-                    .setUri(Uri.parse(vm.api.absoluteUrl(session.playlistUrl)))
-                    .setMimeType(MimeTypes.APPLICATION_M3U8)
-                    .setSubtitleConfigurations(externalSubs)
-                    .build()
-            }
-        }
-        vm.player.playItem(mediaItem, startPositionMs = resolved.resumeMs)
-        loading = false
+    // Enforce the CURRENT subtitle choice on whatever text groups media3
+    // exposes right now, resolved by identity (stable sideload id) — never by
+    // ordinal. Keyed on the live Tracks so it re-asserts itself after every
+    // session rebuild and whenever sideloads (re)appear; everything not chosen
+    // is kept off, exactly like the web forces every non-active <track> to
+    // "disabled". A burn-in pick resolves to no text group and correctly
+    // lands on selectTextTrack(null): the subtitle is in the video pixels.
+    LaunchedEffect(snapshot.tracks, selectedSubId, decision) {
+        val dec = decision ?: return@LaunchedEffect
+        val sub = dec.subtitles.firstOrNull { it.id == selectedSubId && !it.requiresBurnIn }
+        vm.player.selectTextTrack(sub?.let { resolveTextGroup(snapshot.tracks, it) })
     }
 
     // Progress persistence + near-end next-up prompt, every ~8s while attached.
@@ -227,7 +282,6 @@ fun PlayerScreen(vm: AppViewModel, ui: UiState, screen: Screen.Player) {
         }
     }
 
-    val snapshot by vm.player.snapshot.collectAsState()
     // Setup failures (decision/session) and runtime playback failures (decode
     // error, dead segment, expired HLS session) share the same overlay — the
     // latter previously sat unread in the snapshot: frozen frame, no message.
@@ -293,9 +347,37 @@ fun PlayerScreen(vm: AppViewModel, ui: UiState, screen: Screen.Player) {
         if (showTracks) {
             TrackMenu(
                 decision = decision,
-                snapshot = snapshot,
-                onSelectAudio = { idx -> vm.player.selectAudioGroup(idx) },
-                onSelectText = { idx -> vm.player.selectTextGroup(idx) },
+                selectedAudioIdx = selectedAudioIdx,
+                selectedSubId = selectedSubId,
+                onSelectAudio = { t ->
+                    showTracks = false
+                    if (t.streamIndex != selectedAudioIdx) {
+                        selectedAudioIdx = t.streamIndex
+                        // DIRECT play carries every audio track in the
+                        // container, so a supported, unambiguously-resolved
+                        // pick switches instantly client-side and KEEPS direct
+                        // play. Everything else — HLS (the server muxes exactly
+                        // one audio track in), an unsupported codec, an
+                        // ambiguous language match — goes back to the server by
+                        // stream index: recreate the session, resume in place.
+                        val group = if (activeSession == null && t.supported) resolveAudioGroup(snapshot.tracks, t) else null
+                        if (group != null) vm.player.selectAudioTrack(group)
+                        else scope.launch { startPlayback(vm.player.positionMs()) }
+                    }
+                },
+                onSelectText = { s ->
+                    showTracks = false
+                    if (s?.id != selectedSubId) {
+                        // A burn-in sub only exists as pixels ffmpeg renders
+                        // into the video: entering OR leaving one changes what
+                        // the server must encode, so the session is recreated.
+                        // Text picks cost nothing: the enforcement effect
+                        // re-resolves the sideloaded group from selectedSubId.
+                        val wasBurnIn = decision?.subtitles?.any { it.id == selectedSubId && it.requiresBurnIn } == true
+                        selectedSubId = s?.id
+                        if (s?.requiresBurnIn == true || wasBurnIn) scope.launch { startPlayback(vm.player.positionMs()) }
+                    }
+                },
                 onDismiss = { showTracks = false },
             )
         }
@@ -371,12 +453,19 @@ private fun NextEpisodeBanner(onPlayNow: () -> Unit, onDismiss: () -> Unit) {
     }
 }
 
+/** Netflix-style « Audio et sous-titres » sheet. Rows carry the SERVER'S
+ *  track identities (DecisionAudioTrack / DecisionSubtitle) — resolution to a
+ *  media3 group happens in the caller via TrackSelection.kt, by identity,
+ *  never by list ordinal. The check mark reflects our own selection state
+ *  (selectedAudioIdx / selectedSubId), the single source of truth that
+ *  survives session rebuilds. */
 @Composable
 private fun TrackMenu(
     decision: PlayDecision?,
-    snapshot: local.flix.core.playback.PlaybackSnapshot,
-    onSelectAudio: (Int) -> Unit,
-    onSelectText: (Int?) -> Unit,
+    selectedAudioIdx: Int?,
+    selectedSubId: Int?,
+    onSelectAudio: (DecisionAudioTrack) -> Unit,
+    onSelectText: (DecisionSubtitle?) -> Unit,
     onDismiss: () -> Unit,
 ) {
     Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.6f)).clickable(
@@ -392,96 +481,43 @@ private fun TrackMenu(
                 Text("Piste par défaut", color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
             } else {
                 audioTracks.forEachIndexed { idx, t ->
-                    Text(
-                        (t.title ?: t.language ?: "Piste ${idx + 1}") + if (t.isDefault) " (défaut)" else "",
-                        color = androidx.compose.ui.graphics.Color.White, fontSize = 13.sp,
-                        // Resolve to the media3 group by language; keep the list
-                        // ordinal only as a fallback when the language is missing
-                        // or ambiguous (see resolveAudioGroupIndex).
-                        modifier = Modifier.clickable { onSelectAudio(resolveAudioGroupIndex(snapshot.tracks, t) ?: idx) }.padding(vertical = 6.dp),
+                    TrackMenuRow(
+                        label = (t.title ?: t.language ?: "Piste ${idx + 1}") + if (t.isDefault) " (défaut)" else "",
+                        selected = t.streamIndex == selectedAudioIdx,
+                        onClick = { onSelectAudio(t) },
                     )
                 }
             }
             Spacer(Modifier.size(14.dp))
             Text("Sous-titres", color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             Spacer(Modifier.size(8.dp))
-            Text("Désactivés", color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f), fontSize = 13.sp, modifier = Modifier.clickable { onSelectText(null) }.padding(vertical = 6.dp))
+            TrackMenuRow(label = "Désactivés", selected = selectedSubId == null, onClick = { onSelectText(null) })
             decision?.subtitles.orEmpty().forEachIndexed { idx, s ->
-                Text(
-                    s.title ?: s.language ?: "Piste ${idx + 1}",
-                    color = androidx.compose.ui.graphics.Color.White, fontSize = 13.sp,
-                    // Map to the REAL media3 text group by identity (external subs
-                    // by their sideloaded id, else by language) instead of the raw
-                    // ordinal; no-op if the track isn't actually present so we
-                    // never disable the wrong group (see resolveTextGroupIndex).
-                    modifier = Modifier.clickable { resolveTextGroupIndex(snapshot.tracks, s)?.let { g -> onSelectText(g) } }.padding(vertical = 6.dp),
+                TrackMenuRow(
+                    label = s.title ?: s.language ?: "Piste ${idx + 1}",
+                    selected = s.id == selectedSubId,
+                    onClick = { onSelectText(s) },
                 )
             }
         }
     }
 }
 
-// ---- server-track -> media3-group mapping ----------------------------------
-// The server's decision lists (audioTracks / subtitles) are NOT in the same
-// order — nor even the same set — as the track groups ExoPlayer actually
-// exposes: external subs are sideloaded into their own groups, HLS renditions
-// arrive in playlist order, and burn-in-only subs aren't present as tracks at
-// all. Passing the raw list ordinal therefore selected the wrong group (and
-// external subs never rendered). We instead resolve by identity against the
-// live Tracks. Indices returned are within the type-filtered groups, matching
-// exactly what PlayerHolder.selectAudioGroup / selectTextGroup expect.
-
-/** Media3 audio-group index for a chosen server audio track, matched on
- *  (normalised) language. Returns null when the match is missing OR ambiguous
- *  (several groups share the language), so the caller keeps the positional
- *  ordinal rather than risk switching to the wrong same-language track. */
-private fun resolveAudioGroupIndex(tracks: Tracks, audio: DecisionAudioTrack): Int? {
-    val audioGroups = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
-    val matches = audioGroups.indices.filter { sameLanguage(audioGroups[it].getTrackFormat(0).language, audio.language) }
-    return matches.singleOrNull()
-}
-
-/** Media3 text-group index for a chosen server subtitle. External subs are
- *  sideloaded by us with a stable id (see the MediaItem build), so those match
- *  exactly; embedded/HLS text tracks are matched on (normalised) language.
- *  Returns null when the track isn't in the current Tracks (e.g. an HLS
- *  burn-in-only sub) so the caller can no-op instead of disabling the wrong
- *  group. */
-private fun resolveTextGroupIndex(tracks: Tracks, sub: DecisionSubtitle): Int? {
-    val textGroups = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
-    if (sub.source == "external") {
-        val id = "flix-sub-${sub.id}"
-        val byId = textGroups.indexOfFirst { it.getTrackFormat(0).id == id }
-        if (byId >= 0) return byId
+@Composable
+private fun TrackMenuRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { onClick() }.padding(vertical = 6.dp)) {
+        Text(
+            if (selected) "✓" else " ",
+            color = androidx.compose.ui.graphics.Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.width(20.dp),
+        )
+        Text(
+            label,
+            color = if (selected) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f),
+            fontSize = 13.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+        )
     }
-    val byLang = textGroups.indexOfFirst { sameLanguage(it.getTrackFormat(0).language, sub.language) }
-    return byLang.takeIf { it >= 0 }
 }
-
-/** ISO-639 codes aren't stored uniformly across a real library (ffprobe emits
- *  639-2 "fre"/"fra", while media3 normalises container/HLS tags to 639-1
- *  "fr") — decision.ts flags the very same issue server-side — so compare on a
- *  folded 639-1 code. */
-private fun sameLanguage(a: String?, b: String?): Boolean {
-    val na = normalizeLang(a) ?: return false
-    val nb = normalizeLang(b) ?: return false
-    return na == nb
-}
-
-private fun normalizeLang(code: String?): String? {
-    if (code.isNullOrBlank()) return null
-    val c = code.trim().lowercase().substringBefore('-') // drop region, e.g. "en-US"
-    return LANG_3_TO_1[c] ?: c
-}
-
-/** Common ISO-639-2/B and 639-2/T codes ffprobe emits, folded to the 639-1
- *  code media3 uses — only the languages a home library realistically carries. */
-private val LANG_3_TO_1 = mapOf(
-    "eng" to "en", "fre" to "fr", "fra" to "fr", "spa" to "es", "ger" to "de",
-    "deu" to "de", "ita" to "it", "por" to "pt", "rus" to "ru", "jpn" to "ja",
-    "chi" to "zh", "zho" to "zh", "kor" to "ko", "dut" to "nl", "nld" to "nl",
-    "ara" to "ar", "hin" to "hi", "swe" to "sv", "nor" to "no", "dan" to "da",
-    "fin" to "fi", "pol" to "pl", "tur" to "tr", "ces" to "cs", "cze" to "cs",
-    "gre" to "el", "ell" to "el", "heb" to "he", "tha" to "th", "vie" to "vi",
-    "ukr" to "uk", "ron" to "ro", "rum" to "ro", "hun" to "hu",
-)
