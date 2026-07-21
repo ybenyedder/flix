@@ -17,7 +17,7 @@ import { getConfig } from "../config";
 import { getDb } from "../db";
 
 export type ImageKind = "poster" | "backdrop" | "thumb" | "logo";
-export type ImageSource = "sidecar" | "embedded" | "generated" | "arr";
+export type ImageSource = "sidecar" | "embedded" | "generated" | "arr" | "online";
 
 function sha1(data: Buffer): string {
   return crypto.createHash("sha1").update(data).digest("hex");

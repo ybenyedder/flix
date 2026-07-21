@@ -4,9 +4,10 @@
 
 ### Your library. Your server. Your rules.
 
-A self-hosted, 100% offline video platform with the look and feel of a
-mainstream streaming service — minus the telemetry, the algorithm, and the
-subscription.
+A self-hosted video platform with the look and feel of a mainstream streaming
+service — minus the telemetry, the algorithm, and the subscription. Playback,
+history and recommendations are 100% local; missing key art is fetched
+automatically (and that's switchable off for a strictly offline server).
 
 </div>
 

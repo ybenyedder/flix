@@ -6,7 +6,7 @@
 // by GET /api/admin/settings — the client never imports server config).
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Download, FolderOpen, RefreshCw, Server } from "lucide-react";
+import { Download, FolderOpen, ImageIcon, RefreshCw, Server } from "lucide-react";
 import { api, ApiError } from "@/lib/flix/api";
 import { useProfileStore } from "@/store/profile";
 import { useLibraryStore } from "@/store/library";
@@ -19,6 +19,8 @@ import { VpnSettingsSection } from "./settings/VpnSettingsSection";
 interface AdminSettings {
   autoScan: boolean;
   watcherActive: boolean;
+  onlineArtwork: boolean;
+  tmdbKeySet: boolean;
   config: {
     mediaDir: string;
     mediaDirExists: boolean;
@@ -104,6 +106,40 @@ export function SettingsView() {
       setError(err instanceof ApiError ? err.message : "Échec de la modification");
     } finally {
       setBusyToggle(false);
+    }
+  };
+
+  // Online artwork: toggle + write-only TMDB key (mirrors the arr section's
+  // secret handling — the server only ever reports the key's presence).
+  const [busyArtwork, setBusyArtwork] = useState(false);
+  const [tmdbKeyInput, setTmdbKeyInput] = useState("");
+
+  const toggleOnlineArtwork = async () => {
+    if (!settings || busyArtwork) return;
+    setBusyArtwork(true);
+    setError("");
+    try {
+      setSettings(await api.post<AdminSettings>("/api/admin/settings", { onlineArtwork: !settings.onlineArtwork }));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Échec de la modification");
+    } finally {
+      setBusyArtwork(false);
+    }
+  };
+
+  const saveTmdbKey = async (e: FormEvent) => {
+    e.preventDefault();
+    if (busyArtwork) return;
+    setBusyArtwork(true);
+    setError("");
+    try {
+      setSettings(await api.post<AdminSettings>("/api/admin/settings", { tmdbKey: tmdbKeyInput.trim() }));
+      setTmdbKeyInput("");
+      notify(tmdbKeyInput.trim() ? "Clé TMDB enregistrée — récupération des illustrations lancée" : "Clé TMDB effacée");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Échec de l'enregistrement");
+    } finally {
+      setBusyArtwork(false);
     }
   };
 
@@ -226,6 +262,58 @@ export function SettingsView() {
               />
             </button>
           </div>
+        </Section>
+
+        <Section title="Illustrations" icon={ImageIcon}>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm text-white">Télécharger automatiquement les affiches manquantes</p>
+              <p className="mt-0.5 text-xs text-muted">
+                Quand un titre n&apos;a ni jaquette ni fond fournis, Flix récupère les vrais visuels en ligne (TVmaze pour les séries,
+                Wikipédia pour les films) à la fin de chaque analyse. Désactivez pour un serveur strictement hors-ligne — la lecture et
+                l&apos;historique restent locaux dans tous les cas.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={settings?.onlineArtwork ?? false}
+              disabled={!settings || busyArtwork}
+              onClick={() => void toggleOnlineArtwork()}
+              className={
+                "relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-40 " +
+                (settings?.onlineArtwork ? "bg-accent" : "bg-white/10")
+              }
+            >
+              <span
+                className={
+                  "absolute top-0.5 size-5 rounded-full bg-white shadow-card transition-transform duration-200 ease-out-quart " +
+                  (settings?.onlineArtwork ? "translate-x-[22px]" : "translate-x-0.5")
+                }
+              />
+            </button>
+          </div>
+          <form onSubmit={saveTmdbKey} className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              value={tmdbKeyInput}
+              onChange={(e) => setTmdbKeyInput(e.target.value)}
+              type="password"
+              autoComplete="off"
+              placeholder={settings?.tmdbKeySet ? "Clé TMDB enregistrée — coller une nouvelle clé pour la remplacer" : "Clé API TMDB (optionnelle)"}
+              className="min-w-0 flex-1 rounded-field bg-white/5 px-3 py-2 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-accent/60"
+            />
+            <button
+              type="submit"
+              disabled={busyArtwork || (!tmdbKeyInput.trim() && !settings?.tmdbKeySet)}
+              className="shrink-0 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15 disabled:opacity-40"
+            >
+              Enregistrer
+            </button>
+          </form>
+          <p className="mt-2 text-xs text-muted">
+            Avec une clé TMDB (gratuite), la couverture devient totale : affiches en français, fonds ET logos de titres — le rendu Netflix
+            complet. Sans clé, seules les affiches sont récupérées.
+          </p>
         </Section>
 
         <ArrSettingsSection />

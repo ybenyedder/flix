@@ -31,36 +31,11 @@ const MAX_COVER_BYTES = 15 * 1024 * 1024;
 
 // ---- pure helpers (unit-tested in test/arrArtwork.test.ts) ------------------
 
-export interface ArtRow {
-  id: number;
-  poster_hash: string | null;
-  poster_source: string | null;
-  backdrop_hash: string | null;
-  backdrop_source: string | null;
-  logo_hash: string | null;
-}
-
-export interface ArtNeeds {
-  poster: boolean;
-  backdrop: boolean;
-  logo: boolean;
-}
-
-/** A slot wants arr art when it's empty or holds a frame-extract. Sidecar,
- *  embedded and previously-fetched arr art are all left alone. Logos are only
- *  ever filled, never replaced — the scanner never generates one. */
-export function computeNeeds(row: ArtRow): ArtNeeds {
-  const wants = (hash: string | null, source: string | null) => hash === null || source === "generated";
-  return {
-    poster: wants(row.poster_hash, row.poster_source),
-    backdrop: wants(row.backdrop_hash, row.backdrop_source),
-    logo: row.logo_hash === null,
-  };
-}
-
-export function hasAnyNeed(needs: ArtNeeds): boolean {
-  return needs.poster || needs.backdrop || needs.logo;
-}
+// Needs computation shared with the online-artwork pass — re-exported so
+// existing consumers/tests keep their import path (house façade pattern).
+import { computeNeeds, hasAnyNeed, listTargets as listNeedTargets, type ArtRow, type ArtNeeds } from "../library/artworkNeeds";
+export { computeNeeds, hasAnyNeed };
+export type { ArtRow, ArtNeeds };
 
 export interface CoverImage {
   coverType?: string;
@@ -114,20 +89,8 @@ async function fetchCover(service: "radarr" | "sonarr", coverPath: string): Prom
 type Db = ReturnType<typeof getDb>;
 
 function listTargets(db: Db, table: "movies" | "shows"): Map<number, ArtNeeds> {
-  const rows = db
-    .prepare(
-      `SELECT t.id, t.poster_hash, pi.source AS poster_source,
-              t.backdrop_hash, bi.source AS backdrop_source, t.logo_hash
-       FROM ${table} t
-       LEFT JOIN images pi ON pi.hash = t.poster_hash
-       LEFT JOIN images bi ON bi.hash = t.backdrop_hash`,
-    )
-    .all() as ArtRow[];
   const map = new Map<number, ArtNeeds>();
-  for (const row of rows) {
-    const needs = computeNeeds(row);
-    if (hasAnyNeed(needs)) map.set(row.id, needs);
-  }
+  for (const [id, target] of listNeedTargets(db, table)) map.set(id, target.needs);
   return map;
 }
 

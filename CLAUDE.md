@@ -65,7 +65,7 @@ public symbols, so consumers/tests never change.
 |---|---|---|
 | **Core** | `server/{config,db,auth,http,paths,rateLimit,logger,bootstrap}.ts` (auth's scrypt/session internals live in `authparts/`) | every route |
 | **Library scan** | `server/library/scanner.ts` (orchestrator) + `library/scan/{walk,classify,upsert,probePass,nfoPass,prune,fts,cacheGc}.ts` (phases) + `naming*`, `nfo`, `ffprobe`, `repository`, `watcher`, `sidecarSubs` | `/api/library*` |
-| **Images** | `server/library/{images,frameExtract,imagesPass,trickplay}.ts` | `/api/images/[hash]`, `/api/trickplay/[fileId]` |
+| **Images** | `server/library/{images,frameExtract,imagesPass,trickplay,artworkNeeds,onlineArtwork}.ts` + `arr/artwork.ts` (arr MediaCover enrichment) | `/api/images/[hash]`, `/api/trickplay/[fileId]` |
 | **Playback** | `server/playback/{decision,sessions,hlsArgs,subtitles,access,streamUtil}.ts`, `lib/flix/{playerLogic,caps,videoFormats}.ts` | `/api/play/*`, `/api/stream/[fileId]`, `/api/subs/[id]` |
 | **Reco + state** | `server/reco/{engine,scoring,aggregates,catalogIndex}.ts`, `server/state/{userState,settings,stats}.ts`, `lib/flix/{reco,rows,kids}.ts` | `/api/recommend`, `/api/state`, `/api/stats` |
 | **Downloads (*arr)** | `server/arr/*.ts` (opt-in) | `/api/arr/*`, `/api/admin/arr/*` |
@@ -87,10 +87,13 @@ even if tests pass.
   video that could be remuxed; never remux what can direct-play. The decision is
   computed **server-side only** (`playback/decision.ts`); the client never
   recomputes it. `-c:v copy` is mandatory in remux.
-- **Zero outbound network calls**, by design — except the opt-in *arr/VPN
-  features (`server/arr/*`, `server/vpn/*`), which are hard-gated behind
-  `isArrEnabled()`/`isVpnEnabled()` and only ever talk to the operator's own
-  services. Do not add a fetch anywhere else.
+- **No outbound network calls for playback/browsing/telemetry** — ever. The
+  allowed exceptions are: the opt-in *arr/VPN features (`server/arr/*`,
+  `server/vpn/*`), hard-gated behind `isArrEnabled()`/`isVpnEnabled()`, which
+  only talk to the operator's own services; and the **online artwork pass**
+  (`library/onlineArtwork.ts`, operator-requested, ON by default with an admin
+  opt-out) which fetches missing key art from TMDB (operator's key) or
+  TVmaze/Wikipedia. Do not add a fetch anywhere else.
 - **Kids gate = 404, never 403.** A mature title must be byte-identical to an
   unknown id for a kids profile (no existence leak). Enforced on every playback
   route via `playback/access.ts` and in the reco engine.

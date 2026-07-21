@@ -252,6 +252,9 @@ export async function runScan(): Promise<ScanProgress> {
       .then(() => import("../arr/artwork"))
       .then((m) => m.runArtworkPass())
       .catch(() => {/* best effort */})
+      .then(() => import("./onlineArtwork"))
+      .then((m) => m.runOnlineArtworkPass())
+      .catch(() => {/* best effort */})
       .then(() => import("./trickplay"))
       .then((m) => m.runTrickplayPass())
       .catch(() => {/* best effort */});
