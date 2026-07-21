@@ -76,6 +76,7 @@ import kotlinx.coroutines.launch
 import local.flix.core.model.CatalogItem
 import local.flix.core.model.ProgressSummary
 import local.flix.core.model.filterForProfile
+import local.flix.core.model.resumeMs
 import local.flix.tv.ui.TvTab
 import local.flix.tv.ui.TvUiState
 import local.flix.tv.ui.TvViewModel
@@ -491,7 +492,7 @@ internal fun TvTile(
             // 95%-watched film surfacing in a reco row must open its detail
             // sheet, not dump the user into the end credits.
             if (progress != null && !progress.watched && progress.ratio in 0.02..0.92) {
-                vm.play(progress.topType, progress.topId, if (progress.itemType == "episode") progress.itemId else null, (progress.position * 1000).toLong())
+                vm.play(progress.topType, progress.topId, if (progress.itemType == "episode") progress.itemId else null, progress.resumeMs())
             } else {
                 vm.openDetail(item.type, item.id)
             }

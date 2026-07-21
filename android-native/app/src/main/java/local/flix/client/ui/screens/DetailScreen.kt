@@ -51,6 +51,8 @@ import local.flix.core.model.EpisodeDetail
 import local.flix.core.model.SeasonDetail
 import local.flix.core.model.flattenEpisodes
 import local.flix.core.model.nextUpEpisode
+import local.flix.core.model.resumeMs
+import local.flix.core.model.showHasResume
 
 @Composable
 fun DetailScreen(vm: AppViewModel, ui: UiState, type: String, id: Int) {
@@ -60,7 +62,7 @@ fun DetailScreen(vm: AppViewModel, ui: UiState, type: String, id: Int) {
             item {
                 if (type == "movie") {
                     val detail = ui.movieDetails[id]
-                    if (detail != null) MovieHeader(vm, detail.item, detail.files.firstOrNull()?.duration ?: 0.0, detail.files.firstOrNull()?.id)
+                    if (detail != null) MovieHeader(vm, ui, detail.item, detail.files.firstOrNull()?.duration ?: 0.0, detail.files.firstOrNull()?.id)
                 } else {
                     val detail = ui.showDetails[id]
                     if (detail != null) {
@@ -80,8 +82,11 @@ fun DetailScreen(vm: AppViewModel, ui: UiState, type: String, id: Int) {
 }
 
 @Composable
-private fun MovieHeader(vm: AppViewModel, item: local.flix.core.model.CatalogItem, duration: Double, fileId: Int?) {
+private fun MovieHeader(vm: AppViewModel, ui: UiState, item: local.flix.core.model.CatalogItem, duration: Double, fileId: Int?) {
     val colors = LocalFlixColors.current
+    // Resume where the user left off — the mobile detail button used to ignore
+    // the saved position and restart at 0:00 (unlike the TV app and the web).
+    val resumeMs = ui.userState.progress.firstOrNull { it.itemType == "movie" && it.itemId == item.id }?.resumeMs() ?: 0L
     Column {
         Box(Modifier.fillMaxWidth().aspectRatio(0.9f)) {
             FlixImage(vm.api, item.backdropHash ?: item.posterHash, width = 1440, modifier = Modifier.fillMaxSize()) {
@@ -101,7 +106,11 @@ private fun MovieHeader(vm: AppViewModel, item: local.flix.core.model.CatalogIte
                 }
             }
         }
-        ActionRow(vm, item.type, item.id, onPlay = { vm.play(item.type, item.id) })
+        ActionRow(
+            vm, item.type, item.id,
+            playLabel = if (resumeMs > 0L) "Reprendre" else "Lecture",
+            onPlay = { vm.play(item.type, item.id, resumeMs = resumeMs) },
+        )
         InfoBody(item)
     }
 }
@@ -129,9 +138,17 @@ private fun ShowHeader(vm: AppViewModel, ui: UiState, show: local.flix.core.mode
         }
         ActionRow(
             vm, show.item.type, show.item.id,
+            playLabel = if (showHasResume(show, ui.userState)) "Reprendre" else "Lecture",
             onPlay = {
                 val ep = nextUp ?: show.flattenFirst()
-                if (ep != null) vm.play("show", show.item.id, ep.id) else vm.play("show", show.item.id)
+                if (ep != null) {
+                    // "Reprendre" must actually resume: nextUp can be an episode
+                    // already in progress — start it at its saved position, not 0:00.
+                    val progress = ui.userState.progress.firstOrNull { it.itemType == "episode" && it.itemId == ep.id }
+                    vm.play("show", show.item.id, ep.id, progress?.resumeMs() ?: 0L)
+                } else {
+                    vm.play("show", show.item.id)
+                }
             },
         )
         InfoBody(show.item)
@@ -166,9 +183,9 @@ private fun EpisodeRow(vm: AppViewModel, ui: UiState, showId: Int, ep: EpisodeDe
     val colors = LocalFlixColors.current
     val progress = ui.userState.progress.firstOrNull { it.itemType == "episode" && it.itemId == ep.id }
     Row(
-        // takeIf !watched: replaying a finished episode restarts from 0 instead
-        // of "resuming" on its final millisecond (instant STATE_ENDED).
-        Modifier.fillMaxWidth().clickable { vm.play("show", showId, ep.id, ((progress?.takeIf { !it.watched }?.position ?: 0.0) * 1000).toLong()) }
+        // resumeMs() returns 0 for a watched episode, so replaying a finished one
+        // restarts from 0 instead of "resuming" on its final millisecond.
+        Modifier.fillMaxWidth().clickable { vm.play("show", showId, ep.id, progress?.resumeMs() ?: 0L) }
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -193,7 +210,7 @@ private fun EpisodeRow(vm: AppViewModel, ui: UiState, showId: Int, ep: EpisodeDe
 }
 
 @Composable
-private fun ActionRow(vm: AppViewModel, type: String, id: Int, onPlay: () -> Unit) {
+private fun ActionRow(vm: AppViewModel, type: String, id: Int, playLabel: String, onPlay: () -> Unit) {
     val colors = LocalFlixColors.current
     val inList = vm.isInMyList(type, id)
     val rating = vm.ratingFor(type, id)
@@ -204,7 +221,7 @@ private fun ActionRow(vm: AppViewModel, type: String, id: Int, onPlay: () -> Uni
         ) {
             Icon(Icons.Filled.PlayArrow, null, tint = colors.background, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(6.dp))
-            Text("Lecture", color = colors.background, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text(playLabel, color = colors.background, fontWeight = FontWeight.Bold, fontSize = 14.sp)
         }
         IconChip(if (inList) Icons.Filled.Check else Icons.Filled.Add, active = inList) { vm.toggleMyList(type, id) }
         IconChip(Icons.Filled.ThumbUp, active = rating == 1 || rating == 2) { vm.setRating(type, id, if (rating == 1 || rating == 2) 0 else 1) }

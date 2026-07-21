@@ -6,6 +6,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   computeResumeStart,
+  hasResumePoint,
+  showHasResume,
   classifyWatchEvent,
   formatTime,
   findNextEpisode,
@@ -165,6 +167,34 @@ test("pickNextUpEpisode: no episodes at all -> null", () => {
 
 test("pickNextUpEpisode: no progress at all -> starts from episode 1", () => {
   assert.equal(pickNextUpEpisode(seasons, [])?.id, 101);
+});
+
+// ============================================================================
+// hasResumePoint / showHasResume ("Reprendre" vs "Lecture" button label)
+// ============================================================================
+
+test("hasResumePoint: true only when computeResumeStart would resume (past 30s, under 92%)", () => {
+  assert.equal(hasResumePoint(100, 1000), true); // mid-way
+  assert.equal(hasResumePoint(20, 1000), false); // under the 30s floor -> plays from 0
+  assert.equal(hasResumePoint(950, 1000), false); // past 92% -> finished, plays from 0
+});
+
+test("showHasResume: a fresh, never-watched series reads Lecture (no history)", () => {
+  assert.equal(showHasResume(seasons, []), false);
+});
+
+test("showHasResume: a series with a watched or in-progress episode reads Reprendre", () => {
+  assert.equal(showHasResume(seasons, [progressRow(101, 1200, 1200, true)]), true); // ep1 watched, more remain
+  assert.equal(showHasResume(seasons, [progressRow(102, 300, 1200, false)]), true); // ep2 in progress
+});
+
+test("showHasResume: a barely-touched episode (<=5s) doesn't count as started", () => {
+  assert.equal(showHasResume(seasons, [progressRow(101, 3, 1200, false)]), false);
+});
+
+test("showHasResume: a fully-watched series reads Lecture (a rewatch from #1, not a resume)", () => {
+  const all = seasons.flatMap((s) => s.episodes).map((e) => progressRow(e.id, 1200, 1200, true));
+  assert.equal(showHasResume(seasons, all), false);
 });
 
 // ============================================================================

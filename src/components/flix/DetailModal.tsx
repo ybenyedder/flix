@@ -21,6 +21,7 @@ import type { MovieDetail, ShowDetail } from "@/lib/flix/types";
 import { qualityLabel, versionLabel } from "@/lib/flix/quality";
 import { formatDuration } from "@/lib/flix/format";
 import { relatedItems } from "@/lib/flix/rows";
+import { hasResumePoint, showHasResume } from "@/lib/flix/playerLogic";
 import { useUiStore, type DetailTarget } from "@/store/ui";
 import { usePlayerStore } from "@/store/player";
 import { useStateStore } from "@/store/state";
@@ -48,6 +49,7 @@ function DetailModalContent({ target }: { target: DetailTarget }) {
   const rating = useStateStore((s) => s.ratingFor(target.type, target.id));
   const setRating = useStateStore((s) => s.setRating);
   const setWatched = useStateStore((s) => s.setWatched);
+  const progress = useStateStore((s) => s.progress);
 
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -145,6 +147,18 @@ function DetailModalContent({ target }: { target: DetailTarget }) {
   const related = detail ? relatedItems(detail, [...movies, ...shows], 18) : [];
   const activeSeason = detail && detail.type === "show" ? (detail.seasons.find((s) => s.id === seasonId) ?? detail.seasons[0]) : undefined;
 
+  // "Reprendre" vs "Lecture": the player itself resolves the exact resume
+  // offset (resolveResumeOffset) — this only picks the word so the label
+  // matches what pressing play actually does, on parity with TV/mobile.
+  const playLabel = !detail
+    ? "Lecture"
+    : detail.type === "movie"
+      ? (() => {
+          const row = progress.find((p) => p.itemType === "movie" && p.itemId === detail.id);
+          return row && hasResumePoint(row.position, row.duration) ? "Reprendre" : "Lecture";
+        })()
+      : showHasResume(detail.seasons, progress) ? "Reprendre" : "Lecture";
+
   return (
     <div
       className="fixed inset-0 z-50 overflow-y-auto bg-black/70 py-6 backdrop-blur-sm md:py-12"
@@ -207,7 +221,7 @@ function DetailModalContent({ target }: { target: DetailTarget }) {
                     }}
                     className="flex items-center gap-2 rounded-full bg-white px-5 py-2 font-bold text-black transition-colors hover:bg-white/80"
                   >
-                    <Play className="size-5 fill-black" /> Lecture
+                    <Play className="size-5 fill-black" /> {playLabel}
                   </button>
                   <button
                     type="button"

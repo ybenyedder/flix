@@ -47,3 +47,46 @@ fun nextUpEpisode(show: ShowDetail, userState: UserState): EpisodeDetail? {
 
 /** "72% de correspondance"-style badge value, resolved from RecommendResult.matchScores. */
 fun matchScoreFor(matchScores: Map<String, Int>, item: CatalogItem): Int? = matchScores[item.key]
+
+// ---- resume semantics (ported 1:1 from src/lib/flix/playerLogic.ts) ---------
+// Kept identical to the web player so every client resumes at exactly the same
+// spot: a few seconds of lead-in before the stored position, a 30s floor (don't
+// "resume" something barely started) and a 92% ceiling (past that it's finished
+// — start fresh). Previously the native clients passed the raw stored position,
+// which diverged from the web (no lead-in, no floor) and — worse — the mobile
+// detail buttons passed nothing at all, silently restarting at 0:00.
+
+const val WATCHED_RATIO = 0.92
+const val RESUME_MIN_POSITION = 30.0 // seconds
+const val RESUME_BACK_SECONDS = 5.0
+
+/** Where to actually resume playback from (seconds): a few seconds before the
+ *  stored position, but only when there IS a meaningful stored position and the
+ *  item isn't already effectively finished. Under 30s in, or past the watched
+ *  threshold, returns 0 — a fresh play, not a resume. */
+fun computeResumeStart(position: Double, duration: Double): Double {
+    if (position <= RESUME_MIN_POSITION) return 0.0
+    val ratio = if (duration > 0) position / duration else 0.0
+    if (ratio >= WATCHED_RATIO) return 0.0
+    return maxOf(0.0, position - RESUME_BACK_SECONDS)
+}
+
+/** Resume offset for this progress row, in ms — the value handed to ExoPlayer
+ *  as a start position. A `watched` row resumes at 0: replaying a finished
+ *  title must start over, not land on its final millisecond (which would fire
+ *  STATE_ENDED instantly and log a bogus "complete" watch event). */
+fun ProgressSummary.resumeMs(): Long =
+    if (watched) 0L else (computeResumeStart(position, duration) * 1000).toLong()
+
+/** Whether a show's primary button should read "Reprendre": the user has
+ *  started the series (some episode watched or in progress) and it isn't fully
+ *  watched yet. A never-started series, or one already finished, reads
+ *  "Lecture" (a first watch / a rewatch from episode 1) — even though the
+ *  button then legitimately jumps to the next-up episode. */
+fun showHasResume(show: ShowDetail, userState: UserState): Boolean {
+    val epIds = show.flattenEpisodes().map { it.id }.toSet()
+    val rows = userState.progress.filter { it.itemType == "episode" && it.itemId in epIds }
+    val anyStarted = rows.any { it.watched || it.position > 5.0 }
+    val anyUnwatched = show.flattenEpisodes().any { ep -> rows.firstOrNull { it.itemId == ep.id }?.watched != true }
+    return anyStarted && anyUnwatched
+}

@@ -46,6 +46,7 @@ import local.flix.client.ui.theme.LocalFlixColors
 import local.flix.core.model.CatalogItem
 import local.flix.core.model.ProgressSummary
 import local.flix.core.model.filterForProfile
+import local.flix.core.model.resumeMs
 
 @Composable
 fun HomeScreen(vm: AppViewModel, ui: UiState) {
@@ -124,6 +125,10 @@ private fun Header(vm: AppViewModel, ui: UiState, transparentOverlay: Boolean) {
 
 @Composable
 private fun BillboardHero(vm: AppViewModel, ui: UiState, item: CatalogItem) {
+    // Same resume semantics as the poster cards below: if this title (movie or
+    // an episode of this show) is in progress, the hero button resumes it and
+    // reads "Reprendre" instead of restarting at 0:00.
+    val progress = ui.userState.progress.firstOrNull { it.topType == item.type && it.topId == item.id && !it.watched && it.ratio in 0.02..0.92 }
     Box(Modifier.fillMaxWidth().aspectRatio(0.68f)) {
         FlixImage(vm.api, item.backdropHash ?: item.posterHash, width = 1440, modifier = Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize().background(Color(0xFF1F1F1F)))
@@ -151,13 +156,19 @@ private fun BillboardHero(vm: AppViewModel, ui: UiState, item: CatalogItem) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(
                     Modifier.clip(RoundedCornerShape(4.dp)).background(Color.White)
-                        .clickable { vm.play(item.type, item.id) }
+                        .clickable {
+                            if (progress != null) {
+                                vm.play(item.type, item.id, if (progress.itemType == "episode") progress.itemId else null, progress.resumeMs())
+                            } else {
+                                vm.play(item.type, item.id)
+                            }
+                        }
                         .padding(horizontal = 20.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(Icons.Filled.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Lecture", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text(if (progress != null) "Reprendre" else "Lecture", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
                 Row(
                     Modifier.clip(RoundedCornerShape(4.dp)).background(Color.White.copy(alpha = 0.25f))
@@ -201,7 +212,7 @@ private fun PosterCard(vm: AppViewModel, ui: UiState, item: CatalogItem, progres
             // duration server-side, so "resuming" it would start on the last
             // millisecond, fire STATE_ENDED instantly and log a bogus
             // "complete" watch event (plus auto-advance). Watched → detail.
-            if (progress != null && !progress.watched) vm.play(progress.topType, progress.topId, if (progress.itemType == "episode") progress.itemId else null, (progress.position * 1000).toLong())
+            if (progress != null && !progress.watched) vm.play(progress.topType, progress.topId, if (progress.itemType == "episode") progress.itemId else null, progress.resumeMs())
             else vm.openDetail(item.type, item.id)
         },
     ) {
@@ -246,7 +257,7 @@ private fun ContinueCard(vm: AppViewModel, item: CatalogItem, progress: Progress
     val colors = LocalFlixColors.current
     Column(
         Modifier.width(LAND_W.dp).clickable {
-            if (progress != null && !progress.watched) vm.play(progress.topType, progress.topId, if (progress.itemType == "episode") progress.itemId else null, (progress.position * 1000).toLong())
+            if (progress != null && !progress.watched) vm.play(progress.topType, progress.topId, if (progress.itemType == "episode") progress.itemId else null, progress.resumeMs())
             else vm.openDetail(item.type, item.id)
         },
     ) {

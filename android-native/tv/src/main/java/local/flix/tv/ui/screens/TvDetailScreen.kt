@@ -43,6 +43,8 @@ import local.flix.core.model.EpisodeDetail
 import local.flix.core.model.ShowDetail
 import local.flix.core.model.flattenEpisodes
 import local.flix.core.model.nextUpEpisode
+import local.flix.core.model.resumeMs
+import local.flix.core.model.showHasResume
 import local.flix.tv.ui.TvUiState
 import local.flix.tv.ui.TvViewModel
 import local.flix.tv.ui.components.MetaChip
@@ -151,13 +153,14 @@ private fun TvActionRow(vm: TvViewModel, type: String, id: Int, playLabel: Strin
 @Composable
 private fun TvMovieDetail(vm: TvViewModel, ui: TvUiState, item: CatalogItem) {
     // Same resume semantics as the home-screen cards: a mid-watched movie must
-    // resume from its saved position, not silently restart at 0:00.
-    val progress = ui.userState.progress.firstOrNull { it.itemType == "movie" && it.itemId == item.id && !it.watched && it.ratio in 0.02..0.92 }
+    // resume from its saved position, not silently restart at 0:00. resumeMs()
+    // folds in the 30s floor / 92% ceiling, so the label tracks it exactly.
+    val resumeMs = ui.userState.progress.firstOrNull { it.itemType == "movie" && it.itemId == item.id }?.resumeMs() ?: 0L
     LazyColumn(Modifier.fillMaxSize()) {
         item(key = "header") {
             TvHeaderArt(vm, item, matchPct = ui.recommend.matchScores[item.key]) {
-                TvActionRow(vm, item.type, item.id, if (progress != null) "Reprendre" else "Lecture") {
-                    vm.play(item.type, item.id, resumeMs = ((progress?.position ?: 0.0) * 1000).toLong())
+                TvActionRow(vm, item.type, item.id, if (resumeMs > 0L) "Reprendre" else "Lecture") {
+                    vm.play(item.type, item.id, resumeMs = resumeMs)
                 }
             }
         }
@@ -176,7 +179,10 @@ private fun TvShowDetail(vm: TvViewModel, ui: TvUiState, show: ShowDetail) {
     LazyColumn(Modifier.fillMaxSize()) {
         item(key = "header") {
             TvHeaderArt(vm, show.item, matchPct = ui.recommend.matchScores[show.item.key]) {
-                val playLabel = if (nextUp != null) "Reprendre" else "Lecture"
+                // "Reprendre" only when the series has genuinely been started and
+                // isn't finished — a fresh series reads "Lecture" even though the
+                // button still jumps to the (first) next-up episode.
+                val playLabel = if (showHasResume(show, ui.userState)) "Reprendre" else "Lecture"
                 TvActionRow(vm, "show", show.item.id, playLabel) {
                     val ep = nextUp ?: show.flattenEpisodes().firstOrNull()
                     if (ep != null) {
@@ -184,8 +190,8 @@ private fun TvShowDetail(vm: TvViewModel, ui: TvUiState, show: ShowDetail) {
                         // return an episode already IN PROGRESS — starting it
                         // at 0:00 would lose the position the home-screen card
                         // and the episode rows below both restore correctly.
-                        val progress = ui.userState.progress.firstOrNull { it.itemType == "episode" && it.itemId == ep.id && !it.watched }
-                        vm.play("show", show.item.id, ep.id, ((progress?.position ?: 0.0) * 1000).toLong())
+                        val progress = ui.userState.progress.firstOrNull { it.itemType == "episode" && it.itemId == ep.id }
+                        vm.play("show", show.item.id, ep.id, progress?.resumeMs() ?: 0L)
                     } else {
                         vm.play("show", show.item.id)
                     }
@@ -264,7 +270,7 @@ private fun TvEpisodeRow(vm: TvViewModel, ui: TvUiState, showId: Int, ep: Episod
     val colors = LocalFlixTvColors.current
     val progress = ui.userState.progress.firstOrNull { it.itemType == "episode" && it.itemId == ep.id }
     Card(
-        onClick = { vm.play("show", showId, ep.id, ((progress?.position ?: 0.0) * 1000).toLong()) },
+        onClick = { vm.play("show", showId, ep.id, progress?.resumeMs() ?: 0L) },
         modifier = Modifier.fillMaxWidth().padding(horizontal = OVERSCAN.dp, vertical = 5.dp),
         shape = CardDefaults.shape(shape = RoundedCornerShape(8.dp)),
         border = CardDefaults.border(focusedBorder = Border(BorderStroke(2.dp, Color.White), shape = RoundedCornerShape(8.dp))),

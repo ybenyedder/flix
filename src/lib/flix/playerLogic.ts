@@ -26,6 +26,29 @@ export function computeResumeStart(position: number, duration: number): number {
   return Math.max(0, position - RESUME_BACK_SECONDS);
 }
 
+/** Whether a title's primary button should read "Reprendre" rather than
+ *  "Lecture": there's a stored position we'd genuinely resume from. Keyed off
+ *  computeResumeStart so the label never lies — it reads "Reprendre" exactly
+ *  when playback won't start at 0:00. */
+export function hasResumePoint(position: number, duration: number): boolean {
+  return computeResumeStart(position, duration) > 0;
+}
+
+/** Whether a show's primary button should read "Reprendre": the user has
+ *  started the series (some episode watched or in progress) and it isn't fully
+ *  watched yet. A never-started series, or one already finished, reads
+ *  "Lecture" — even though the button still jumps to the next-up episode. */
+export function showHasResume(seasons: SeasonDetail[], progressForShow: ProgressSummary[]): boolean {
+  const flat = seasons.flatMap((s) => s.episodes);
+  const byEpisode = new Map(progressForShow.filter((p) => p.itemType === "episode").map((p) => [p.itemId, p] as const));
+  const anyStarted = flat.some((e) => {
+    const p = byEpisode.get(e.id);
+    return !!p && (p.watched || p.position > 5);
+  });
+  const anyUnwatched = flat.some((e) => byEpisode.get(e.id)?.watched !== true);
+  return anyStarted && anyUnwatched;
+}
+
 export type WatchEventKind = "complete" | "abandon";
 
 /** Classify the final position of a viewing session: finished (>=92%) is a
