@@ -28,7 +28,7 @@ export function EpisodeRow({ episode, showId, showTitle }: { episode: EpisodeDet
 
   return (
     <div className="group/episode -mx-3 flex items-start gap-4 rounded-panel px-3 py-4 transition-colors hover:bg-white/5">
-      <span className="w-6 shrink-0 pt-2 text-lg font-medium tabular-nums text-muted">{episode.episodeNumber}</span>
+      <span className="w-8 shrink-0 pt-2 text-center font-display text-2xl font-semibold tabular-nums text-muted">{episode.episodeNumber}</span>
       <button
         type="button"
         onClick={() => {

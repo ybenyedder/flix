@@ -22,7 +22,7 @@ import { usePlayerStore } from "@/store/player";
 import { useStateStore } from "@/store/state";
 import { useRecoStore } from "@/store/reco";
 
-export function BillboardHero({ item }: { item: CatalogEntry }) {
+export function BillboardHero({ item, topRank = null }: { item: CatalogEntry; topRank?: number | null }) {
   const openDetail = useUiStore((s) => s.openDetail);
   const openPlayer = usePlayerStore((s) => s.open);
   const match = useRecoStore((s) => s.matchFor(item.type, item.id));
@@ -59,6 +59,21 @@ export function BillboardHero({ item }: { item: CatalogEntry }) {
             <h1 className="mb-4 font-display text-4xl font-black tracking-tight text-white drop-shadow-lg md:text-6xl">{item.title}</h1>
           )}
 
+          {/* Netflix "N°X aujourd'hui" flag: shown only when the featured title
+           * actually sits in today's Top 10 row (rank computed by HomeView). */}
+          {topRank !== null && (
+            <div className="mb-3 flex items-center gap-2.5">
+              <span aria-hidden className="grid size-7 place-items-center rounded-[5px] bg-accent text-center font-display text-[8px] font-black leading-[1.05] text-white shadow">
+                TOP
+                <br />
+                10
+              </span>
+              <span className="text-sm font-bold text-white drop-shadow md:text-base">
+                N°{topRank} des {item.type === "movie" ? "films" : "séries"} aujourd’hui
+              </span>
+            </div>
+          )}
+
           {/* Metadata line: match %, year, runtime/seasons, genres, badges. */}
           <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm font-medium text-white/85 drop-shadow md:text-[15px]">
             {match !== null && <span className="font-bold text-green-500">{match}% de correspondance</span>}
@@ -91,6 +106,14 @@ export function BillboardHero({ item }: { item: CatalogEntry }) {
             </button>
           </div>
         </div>
+
+        {/* Netflix's iconic maturity-rating flag: pinned to the hero's right
+         * edge, a hairline white left border over frosted black. */}
+        {item.contentRating && (
+          <div className="absolute bottom-[14%] right-0 hidden items-center border-l-[3px] border-white/70 bg-black/40 py-1.5 pl-3 pr-8 text-sm font-semibold text-white/90 backdrop-blur-sm md:flex">
+            {item.contentRating}
+          </div>
+        )}
       </section>
 
       {/* Lumière ambiante: the artwork's glow spills below the hero, behind the

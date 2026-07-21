@@ -106,9 +106,15 @@ export function SeekBar({ currentTime, duration, onSeek, chapters, trickplay, tr
             />
           ))}
 
+      {/* Playhead knob: revealed on hover like Netflix, but ALSO while
+       * dragging — a touch scrub has no hover, and an invisible knob under
+       * the finger reads as a dead bar. */}
       <div
-        className="absolute top-1/2 size-3 -translate-y-1/2 rounded-full bg-accent opacity-0 shadow transition-opacity group-hover/seek:opacity-100"
-        style={{ left: `calc(${shown * 100}% - 6px)` }}
+        className={
+          "absolute top-1/2 size-3.5 -translate-y-1/2 rounded-full bg-accent shadow-[0_1px_6px_rgb(0_0_0/0.6)] transition-opacity " +
+          (dragging ? "opacity-100" : "opacity-0 group-hover/seek:opacity-100")
+        }
+        style={{ left: `calc(${shown * 100}% - 7px)` }}
       />
 
       {/* Hover/scrub preview: trickplay thumbnail when available, plain timecode (+ chapter title) tooltip otherwise. */}

@@ -238,6 +238,46 @@ button {
   animation: flix-shimmer 1.6s ease-in-out infinite;
 }
 
+/* --- player volume slider -------------------------------------------------
+ * Netflix-style thin track with a white thumb. The filled portion is driven
+ * by the `--vol` custom property (set inline from React state) for WebKit;
+ * Firefox gets the same fill via ::-moz-range-progress instead. */
+input[type="range"].volume-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(to right, var(--accent) 0%, var(--accent) calc(var(--vol, 0) * 100%), rgb(255 255 255 / 0.3) calc(var(--vol, 0) * 100%));
+  outline-offset: 4px;
+  cursor: pointer;
+}
+input[type="range"].volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.5);
+}
+input[type="range"].volume-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.5);
+}
+input[type="range"].volume-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: rgb(255 255 255 / 0.3);
+}
+input[type="range"].volume-slider::-moz-range-progress {
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--accent);
+}
+
 /* --- misc ------------------------------------------------------------------ */
 
 @keyframes flix-fade-up {

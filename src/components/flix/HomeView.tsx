@@ -129,6 +129,16 @@ export function HomeView() {
     [engineGenreRows.length, all],
   );
 
+  // Rank of the featured title inside today's Top 10 row of ITS kind — drives
+  // the billboard's "N°X des films aujourd'hui" flag; 0/absent → no flag.
+  const billboardRank = useMemo(() => {
+    if (!billboard) return null;
+    const top10 =
+      billboard.type === "movie" ? (top10MoviesRow ? (rowItems.get(top10MoviesRow.id) ?? []) : fallbackTop10Movies) : top10ShowsRow ? (rowItems.get(top10ShowsRow.id) ?? []) : fallbackTop10Shows;
+    const index = top10.findIndex((entry) => entry.type === billboard.type && entry.id === billboard.id);
+    return index === -1 ? null : index + 1;
+  }, [billboard, top10MoviesRow, top10ShowsRow, rowItems, fallbackTop10Movies, fallbackTop10Shows]);
+
   const myListItems = useMemo<CatalogItem[]>(() => {
     const wanted = new Set(myList.map((e) => `${e.itemType}-${e.itemId}`));
     return all.filter((item) => wanted.has(keyOf(item)));
@@ -182,7 +192,7 @@ export function HomeView() {
 
   return (
     <div className="pb-20">
-      {billboard ? <BillboardHero item={billboard} /> : <div className="h-24" />}
+      {billboard ? <BillboardHero item={billboard} topRank={billboardRank} /> : <div className="h-24" />}
       <div className="relative z-10 -mt-16 space-y-8 stagger-children md:-mt-24">
         <ArrPromoBanner />
         {continueWatching.length > 0 && (
