@@ -44,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -55,6 +56,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,6 +71,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import local.flix.core.model.CatalogItem
 import local.flix.core.model.ProgressSummary
@@ -251,10 +254,31 @@ private fun TvBrowseContent(vm: TvViewModel, ui: TvUiState) {
             }
         }
     }
-    val hero = billboardItem ?: remember(rows) { defaultBillboard(ui, rows) }
+    val hero = billboardItem ?: remember(rows, ui.recommend, tab) { defaultBillboard(ui, rows) }
     val firstCardFocus = remember(tab) { FocusRequester() }
     val listState = remember(tab) { LazyListState() }
     val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    // Pivot offsets (px). Vertical: the focused row pins 40dp BELOW the band
+    // top so a sliver of the previous row stays composed — at exactly 0 the
+    // row above would leave the lazy viewport entirely and D-pad UP would go
+    // dead (nothing focusable above). Horizontal: the focused card rests 20dp
+    // right of the content edge so the previous card (10dp gap) beats the nav
+    // rail (26dp gap) in the 2D focus search — at 0 the rail is closer and
+    // LEFT mid-row jumped into the menu. Both clamp at item 0, keeping the
+    // first card flush and the rail reachable from it.
+    val rowPeekPx = with(density) { 40.dp.roundToPx() }
+    val cardInsetPx = with(density) { 20.dp.roundToPx() }
+    // O(1) progress lookup for tiles; keep the FIRST entry per top-level key
+    // (the server lists the most recent episode first), like the row builder.
+    val progressByKey = remember(ui.userState) {
+        buildMap {
+            for (p in ui.userState.progress) {
+                val k = "${p.topType}:${p.topId}"
+                if (k !in this) put(k, p)
+            }
+        }
+    }
 
     Box(Modifier.fillMaxSize().background(colors.background)) {
         // Full-bleed backdrop of the focused title — the whole screen is the
@@ -320,11 +344,12 @@ private fun TvBrowseContent(vm: TvViewModel, ui: TvUiState) {
                 ) {
                     itemsIndexed(rows, key = { _, r -> r.id }) { rowIndex, row ->
                         TvContentRow(
-                            vm, ui, row,
+                            vm, row, progressByKey,
+                            cardInsetPx = cardInsetPx,
                             firstFocusRequester = if (rowIndex == 0) firstCardFocus else null,
                             onFocusCard = { item ->
                                 focusedItem = item
-                                scope.launch { runCatching { listState.animateScrollToItem(rowIndex) } }
+                                scope.launch { runCatching { listState.animateScrollToItem(rowIndex, -rowPeekPx) } }
                             },
                         )
                     }
@@ -334,7 +359,17 @@ private fun TvBrowseContent(vm: TvViewModel, ui: TvUiState) {
     }
 
     LaunchedEffect(tab, rows.isNotEmpty()) {
-        if (rows.isNotEmpty()) runCatching { firstCardFocus.requestFocus() }
+        if (rows.isNotEmpty()) {
+            // The requester lives on a lazy item that is subcomposed during
+            // MEASURE — an effect launched by the same recomposition runs
+            // first, so an immediate requestFocus() throws (swallowed) and the
+            // first card silently never gets focus on tab switches / returns
+            // from Detail. Wait for a measure pass that actually placed items,
+            // plus one frame for the modifier node to attach.
+            snapshotFlow { listState.layoutInfo.visibleItemsInfo.isNotEmpty() }.first { it }
+            withFrameNanos {}
+            runCatching { firstCardFocus.requestFocus() }
+        }
     }
 }
 
@@ -392,8 +427,9 @@ private fun HeroTitle(title: String) {
 @Composable
 private fun TvContentRow(
     vm: TvViewModel,
-    ui: TvUiState,
     row: TvRow,
+    progressByKey: Map<String, ProgressSummary>,
+    cardInsetPx: Int,
     firstFocusRequester: FocusRequester?,
     onFocusCard: (CatalogItem) -> Unit,
 ) {
@@ -417,11 +453,11 @@ private fun TvContentRow(
             contentPadding = PaddingValues(start = CONTENT_START, end = 760.dp, top = 8.dp, bottom = 8.dp),
         ) {
             itemsIndexed(row.items, key = { _, item -> item.key }) { index, catalogItem ->
-                val progress = ui.userState.progress.firstOrNull { "${it.topType}:${it.topId}" == catalogItem.key }
+                val progress = progressByKey[catalogItem.key]
                 val focusMod = if (index == 0 && firstFocusRequester != null) Modifier.focusRequester(firstFocusRequester) else Modifier
                 val onFocus = {
                     onFocusCard(catalogItem)
-                    scope.launch { runCatching { rowState.animateScrollToItem(index) } }
+                    scope.launch { runCatching { rowState.animateScrollToItem(index, -cardInsetPx) } }
                     Unit
                 }
                 if (row.topTen) {
@@ -449,7 +485,10 @@ private fun TvTile(
 
     Card(
         onClick = {
-            if (progress != null && !progress.watched) {
+            // Resume only inside the same window the Continuer row uses — a
+            // 95%-watched film surfacing in a reco row must open its detail
+            // sheet, not dump the user into the end credits.
+            if (progress != null && !progress.watched && progress.ratio in 0.02..0.92) {
                 vm.play(progress.topType, progress.topId, if (progress.itemType == "episode") progress.itemId else null, (progress.position * 1000).toLong())
             } else {
                 vm.openDetail(item.type, item.id)

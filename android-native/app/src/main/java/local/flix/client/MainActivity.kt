@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,12 +34,19 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent { AppRoot(vm) }
-    }
 
-    override fun onBackPressed() {
-        if (!vm.back()) {
-            @Suppress("DEPRECATION")
-            super.onBackPressed()
-        }
+        // Registered on the dispatcher, NOT via the deprecated onBackPressed
+        // override: with targetSdk 36, Android 16+ enables predictive back by
+        // default and stops calling that override — BACK would exit the app
+        // instead of popping the in-app navigation stack.
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (!vm.back()) {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true
+                }
+            }
+        })
     }
 }
