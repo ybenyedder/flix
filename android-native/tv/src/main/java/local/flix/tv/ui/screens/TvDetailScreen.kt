@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -151,12 +153,16 @@ private fun TvMovieDetail(vm: TvViewModel, ui: TvUiState, item: CatalogItem) {
     // Same resume semantics as the home-screen cards: a mid-watched movie must
     // resume from its saved position, not silently restart at 0:00.
     val progress = ui.userState.progress.firstOrNull { it.itemType == "movie" && it.itemId == item.id && !it.watched && it.ratio in 0.02..0.92 }
-    Column(Modifier.fillMaxSize()) {
-        TvHeaderArt(vm, item, matchPct = ui.recommend.matchScores[item.key]) {
-            TvActionRow(vm, item.type, item.id, if (progress != null) "Reprendre" else "Lecture") {
-                vm.play(item.type, item.id, resumeMs = ((progress?.position ?: 0.0) * 1000).toLong())
+    LazyColumn(Modifier.fillMaxSize()) {
+        item(key = "header") {
+            TvHeaderArt(vm, item, matchPct = ui.recommend.matchScores[item.key]) {
+                TvActionRow(vm, item.type, item.id, if (progress != null) "Reprendre" else "Lecture") {
+                    vm.play(item.type, item.id, resumeMs = ((progress?.position ?: 0.0) * 1000).toLong())
+                }
             }
         }
+        item(key = "similar") { TvSimilarRow(vm, ui, item) }
+        item(key = "tail") { Spacer(Modifier.height(OVERSCAN.dp)) }
     }
 }
 
@@ -206,7 +212,50 @@ private fun TvShowDetail(vm: TvViewModel, ui: TvUiState, show: ShowDetail) {
             }
         }
         items(season?.episodes.orEmpty(), key = { it.id }) { ep -> TvEpisodeRow(vm, ui, show.item.id, ep) }
+        item(key = "similar") { TvSimilarRow(vm, ui, show.item) }
         item(key = "tail") { Spacer(Modifier.height(OVERSCAN.dp)) }
+    }
+}
+
+// --- similar titles ----------------------------------------------------------
+
+/** Netflix's « Titres similaires » : ranked by shared-genre count (then
+ *  recency) against the whole visible catalogue — the same signal the web's
+ *  relatedItems() uses. Pure client-side, nothing to fetch. */
+private fun similarItems(item: CatalogItem, ui: TvUiState, limit: Int = 15): List<CatalogItem> {
+    val pool = (ui.visibleMovies + ui.visibleShows).filter { it.key != item.key }
+    if (item.genres.isEmpty()) return pool.sortedByDescending { it.addedAt }.take(limit)
+    return pool
+        .map { c -> c to c.genres.count { it in item.genres } }
+        .filter { it.second > 0 }
+        .sortedWith(compareByDescending<Pair<CatalogItem, Int>> { it.second }.thenByDescending { it.first.addedAt })
+        .map { it.first }
+        .take(limit)
+}
+
+@Composable
+private fun TvSimilarRow(vm: TvViewModel, ui: TvUiState, item: CatalogItem) {
+    val colors = LocalFlixTvColors.current
+    val similar = remember(item.key, ui.library, ui.isKids) { similarItems(item, ui) }
+    if (similar.isEmpty()) return
+    Column(Modifier.padding(top = 10.dp)) {
+        Text(
+            "Titres similaires",
+            color = colors.text,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(start = OVERSCAN.dp, bottom = 2.dp),
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(start = OVERSCAN.dp, end = OVERSCAN.dp, top = 8.dp, bottom = 8.dp),
+        ) {
+            items(similar, key = { it.key }) { s ->
+                // progress=null → the tile always opens the detail sheet, the
+                // right move in a discovery row.
+                TvTile(vm, s, null, false) {}
+            }
+        }
     }
 }
 

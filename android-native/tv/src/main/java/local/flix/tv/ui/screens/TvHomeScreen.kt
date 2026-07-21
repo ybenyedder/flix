@@ -470,8 +470,10 @@ private fun TvContentRow(
     }
 }
 
+// Internal (not private): the Netflix boxart tile is also the card of the
+// « Titres similaires » row on the detail screen (same package).
 @Composable
-private fun TvTile(
+internal fun TvTile(
     vm: TvViewModel,
     item: CatalogItem,
     progress: ProgressSummary?,
