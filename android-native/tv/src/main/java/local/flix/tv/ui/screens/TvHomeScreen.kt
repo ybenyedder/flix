@@ -33,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -52,7 +53,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -89,7 +92,13 @@ private const val TILE_H = 110 // 16:9, Netflix landscape boxart
 // guarantees row *ids* are unique, two reco rows can share a title (homonym
 // seeds → "Parce que vous avez regardé Dune" twice) and a duplicate LazyColumn
 // key crashes the whole home screen.
-private data class TvRow(val id: String, val title: String, val items: List<CatalogItem>, val continueRow: Boolean = false)
+private data class TvRow(
+    val id: String,
+    val title: String,
+    val items: List<CatalogItem>,
+    val continueRow: Boolean = false,
+    val topTen: Boolean = false,
+)
 
 // --- row builders ------------------------------------------------------------
 
@@ -98,6 +107,7 @@ private fun buildRows(ui: TvUiState): List<TvRow> = when (ui.tab) {
     TvTab.SERIES -> buildCatalogRows(ui.visibleShows, "series", "Séries récemment ajoutées")
     TvTab.MOVIES -> buildCatalogRows(ui.visibleMovies, "films", "Films récemment ajoutés")
     TvTab.MY_LIST -> buildMyListRows(ui)
+    TvTab.SEARCH -> emptyList() // search renders its own layout, never rows
 }
 
 private fun buildHomeRows(ui: TvUiState): List<TvRow> {
@@ -127,10 +137,15 @@ private fun buildHomeRows(ui: TvUiState): List<TvRow> {
         }
     }
     for (row in ui.recommend.rows) {
+        // Top 10 is a RANKING — dropping an entry because it already appeared
+        // in Ma liste would silently renumber the chart, so it is exempt from
+        // the cross-row filter (it still seeds `seen` for later reco rows).
+        val topTen = row.id.startsWith("top10")
         val items = row.items.mapNotNull { ui.library.byKey[it.key] }
-            .filterForProfile(ui.isKids).distinctBy { it.key }.filter { it.key !in seen }
+            .filterForProfile(ui.isKids).distinctBy { it.key }
+            .let { list -> if (topTen) list else list.filter { it.key !in seen } }
         if (items.isNotEmpty()) {
-            rows.add(TvRow("reco:${row.id}", row.title, items))
+            rows.add(TvRow("reco:${row.id}", row.title, items, topTen = topTen))
             seen.addAll(items.map { it.key })
         }
     }
@@ -192,6 +207,7 @@ private fun emptyTabMessage(tab: TvTab): String = when (tab) {
     TvTab.SERIES -> "Aucune série dans la bibliothèque."
     TvTab.MOVIES -> "Aucun film dans la bibliothèque."
     TvTab.MY_LIST -> "Votre liste est vide. Ajoutez des titres depuis leur fiche."
+    TvTab.SEARCH -> "" // unreachable — search has its own layout
 }
 
 // The rows band drives ALL scrolling itself (Netflix pivot: the focused row
@@ -206,6 +222,15 @@ private val NoBringIntoView = object : BringIntoViewSpec {
 
 @Composable
 fun TvHomeScreen(vm: TvViewModel, ui: TvUiState) {
+    val colors = LocalFlixTvColors.current
+    Box(Modifier.fillMaxSize().background(colors.background)) {
+        if (ui.tab == TvTab.SEARCH) TvSearchContent(vm, ui) else TvBrowseContent(vm, ui)
+        TvNavRail(ui, ui.tab, onSelect = vm::selectTab)
+    }
+}
+
+@Composable
+private fun TvBrowseContent(vm: TvViewModel, ui: TvUiState) {
     val colors = LocalFlixTvColors.current
     val tab = ui.tab
     val rows = remember(ui.recommend, ui.userState, ui.library, ui.isKids, tab) { buildRows(ui) }
@@ -304,8 +329,6 @@ fun TvHomeScreen(vm: TvViewModel, ui: TvUiState) {
                 }
             }
         }
-
-        TvNavRail(ui, tab, onSelect = vm::selectTab)
     }
 
     LaunchedEffect(tab, rows.isNotEmpty()) {
@@ -394,9 +417,15 @@ private fun TvContentRow(
             itemsIndexed(row.items, key = { _, item -> item.key }) { index, catalogItem ->
                 val progress = ui.userState.progress.firstOrNull { "${it.topType}:${it.topId}" == catalogItem.key }
                 val focusMod = if (index == 0 && firstFocusRequester != null) Modifier.focusRequester(firstFocusRequester) else Modifier
-                TvTile(vm, catalogItem, progress, row.continueRow, focusMod) {
+                val onFocus = {
                     onFocusCard(catalogItem)
                     scope.launch { runCatching { rowState.animateScrollToItem(index) } }
+                    Unit
+                }
+                if (row.topTen) {
+                    TvTopTenTile(vm, catalogItem, rank = index + 1, modifier = focusMod, onFocus = onFocus)
+                } else {
+                    TvTile(vm, catalogItem, progress, row.continueRow, focusMod, onFocus)
                 }
             }
         }
@@ -476,10 +505,67 @@ private fun TvTile(
     }
 }
 
+/** Netflix's iconic Top 10 tile: a huge chart numeral (dark fill + light
+ *  stroke) with the 2:3 poster overlapping its right edge. The numeral is NOT
+ *  focusable decoration — only the poster card takes focus, like Netflix. */
 @Composable
-private fun ArtFallback() {
+private fun TvTopTenTile(
+    vm: TvViewModel,
+    item: CatalogItem,
+    rank: Int,
+    modifier: Modifier = Modifier,
+    onFocus: () -> Unit,
+) {
     val colors = LocalFlixTvColors.current
-    Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(colors.surfaceFocused, colors.surface))))
+    val numeralStyle = TextStyle(
+        fontSize = 100.sp,
+        fontWeight = FontWeight.Black,
+        letterSpacing = (-8).sp, // squeezes "10" the way Netflix does
+        lineHeight = 100.sp,
+    )
+    Box(Modifier.width(158.dp).height(126.dp)) {
+        Text("$rank", style = numeralStyle.copy(color = Color(0xFF1B1B22)), modifier = Modifier.align(Alignment.BottomStart))
+        Text(
+            "$rank",
+            style = numeralStyle.copy(color = Color.White.copy(alpha = 0.40f), drawStyle = Stroke(width = 3f)),
+            modifier = Modifier.align(Alignment.BottomStart),
+        )
+        Card(
+            onClick = { vm.openDetail(item.type, item.id) },
+            modifier = modifier.align(Alignment.CenterEnd).width(82.dp).onFocusChanged { if (it.isFocused) onFocus() },
+            shape = CardDefaults.shape(shape = RoundedCornerShape(4.dp)),
+            border = CardDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Color.White), shape = RoundedCornerShape(4.dp))),
+            scale = CardDefaults.scale(focusedScale = 1.1f),
+            colors = CardDefaults.colors(containerColor = colors.surface, focusedContainerColor = colors.surface),
+        ) {
+            Box(Modifier.width(82.dp).height(123.dp)) {
+                TvImage(vm.api, item.posterHash ?: item.backdropHash ?: item.thumbHash, width = 480, modifier = Modifier.fillMaxSize()) {
+                    ArtFallback(item.title)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArtFallback(title: String? = null) {
+    val colors = LocalFlixTvColors.current
+    Box(
+        Modifier.fillMaxSize().background(Brush.linearGradient(listOf(colors.surfaceFocused, colors.surface))),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (title != null) {
+            Text(
+                title,
+                color = colors.textMuted,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(6.dp),
+            )
+        }
+    }
 }
 
 // --- nav rail ----------------------------------------------------------------
@@ -538,6 +624,7 @@ private fun TvNavRail(ui: TvUiState, selected: TvTab, onSelect: (TvTab) -> Unit)
                     )
                 }
             }
+            NavRailItem(Icons.Filled.Search, "Rechercher", selected == TvTab.SEARCH, expanded) { onSelect(TvTab.SEARCH) }
             NavRailItem(Icons.Filled.Home, "Accueil", selected == TvTab.HOME, expanded) { onSelect(TvTab.HOME) }
             NavRailItem(Icons.Filled.Tv, "Séries", selected == TvTab.SERIES, expanded) { onSelect(TvTab.SERIES) }
             NavRailItem(Icons.Filled.Movie, "Films", selected == TvTab.MOVIES, expanded) { onSelect(TvTab.MOVIES) }

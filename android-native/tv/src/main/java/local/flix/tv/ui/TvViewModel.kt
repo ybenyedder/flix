@@ -35,8 +35,9 @@ enum class TvPhase { BOOT, CONNECT, PROFILES, LOGIN, LOADING, HOME, ERROR }
 
 /** Netflix-style sections reachable from the left nav rail. HOME mixes
  *  movies+shows (reco rows); SERIES/MOVIES are per-type browse pages built
- *  client-side from the library snapshot (genre rows). */
-enum class TvTab { HOME, SERIES, MOVIES, MY_LIST }
+ *  client-side from the library snapshot (genre rows); SEARCH is the D-pad
+ *  keyboard + instant results screen. */
+enum class TvTab { SEARCH, HOME, SERIES, MOVIES, MY_LIST }
 
 sealed interface TvScreen {
     data object Home : TvScreen

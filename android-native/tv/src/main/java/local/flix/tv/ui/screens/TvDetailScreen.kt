@@ -63,7 +63,7 @@ fun TvDetailScreen(vm: TvViewModel, ui: TvUiState, type: String, id: Int) {
 }
 
 @Composable
-private fun TvHeaderArt(vm: TvViewModel, item: CatalogItem, actions: @Composable () -> Unit) {
+private fun TvHeaderArt(vm: TvViewModel, item: CatalogItem, matchPct: Int? = null, actions: @Composable () -> Unit) {
     val colors = LocalFlixTvColors.current
     Box(Modifier.fillMaxWidth().height(480.dp)) {
         TvImage(vm.api, item.backdropHash ?: item.posterHash ?: item.thumbHash, width = 1440, modifier = Modifier.fillMaxSize()) {
@@ -91,7 +91,12 @@ private fun TvHeaderArt(vm: TvViewModel, item: CatalogItem, actions: @Composable
                     Text(item.title, color = colors.text, fontSize = 38.sp, fontWeight = FontWeight.Black, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
                 Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { metaLine(item).forEach { MetaChip(it) } }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (matchPct != null && matchPct > 0) {
+                        Text("Recommandé à $matchPct %", color = colors.positive, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    }
+                    metaLine(item).forEach { MetaChip(it) }
+                }
                 if (item.genres.isNotEmpty()) {
                     Spacer(Modifier.height(10.dp))
                     Text(item.genres.take(4).joinToString("  •  "), color = colors.textFaint, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
@@ -147,7 +152,7 @@ private fun TvMovieDetail(vm: TvViewModel, ui: TvUiState, item: CatalogItem) {
     // resume from its saved position, not silently restart at 0:00.
     val progress = ui.userState.progress.firstOrNull { it.itemType == "movie" && it.itemId == item.id && !it.watched && it.ratio in 0.02..0.92 }
     Column(Modifier.fillMaxSize()) {
-        TvHeaderArt(vm, item) {
+        TvHeaderArt(vm, item, matchPct = ui.recommend.matchScores[item.key]) {
             TvActionRow(vm, item.type, item.id, if (progress != null) "Reprendre" else "Lecture") {
                 vm.play(item.type, item.id, resumeMs = ((progress?.position ?: 0.0) * 1000).toLong())
             }
@@ -164,7 +169,7 @@ private fun TvShowDetail(vm: TvViewModel, ui: TvUiState, show: ShowDetail) {
 
     LazyColumn(Modifier.fillMaxSize()) {
         item(key = "header") {
-            TvHeaderArt(vm, show.item) {
+            TvHeaderArt(vm, show.item, matchPct = ui.recommend.matchScores[show.item.key]) {
                 val playLabel = if (nextUp != null) "Reprendre" else "Lecture"
                 TvActionRow(vm, "show", show.item.id, playLabel) {
                     val ep = nextUp ?: show.flattenEpisodes().firstOrNull()
