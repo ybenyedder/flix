@@ -36,6 +36,7 @@ const eslintConfig = [
       "build/**",
       "dist/**",
       "dist-desktop/**",
+      "dist-electron-server/**",
       "dist-standalone/**",
       "android-native/**",
       "coverage/**",
