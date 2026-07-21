@@ -125,7 +125,9 @@ private fun buildHomeRows(ui: TvUiState): List<TvRow> {
     if (continueItems.isNotEmpty()) {
         val items = continueItems.mapNotNull { ui.library.byKey["${it.topType}:${it.topId}"] }.distinctBy { it.key }
         if (items.isNotEmpty()) {
-            rows.add(TvRow("continue", "Continuer à regarder", items, continueRow = true))
+            // Netflix's exact row label, profile included.
+            val title = ui.username?.let { "Reprendre avec le profil de $it" } ?: "Continuer à regarder"
+            rows.add(TvRow("continue", title, items, continueRow = true))
             seen.addAll(items.map { it.key })
         }
     }
@@ -225,7 +227,7 @@ fun TvHomeScreen(vm: TvViewModel, ui: TvUiState) {
     val colors = LocalFlixTvColors.current
     Box(Modifier.fillMaxSize().background(colors.background)) {
         if (ui.tab == TvTab.SEARCH) TvSearchContent(vm, ui) else TvBrowseContent(vm, ui)
-        TvNavRail(ui, ui.tab, onSelect = vm::selectTab)
+        TvNavRail(ui, ui.tab, onSelect = vm::selectTab, onSwitchProfile = vm::switchProfile)
     }
 }
 
@@ -259,7 +261,7 @@ private fun TvBrowseContent(vm: TvViewModel, ui: TvUiState) {
         // billboard, Netflix-style, with scrims carving out the text zone
         // (left) and the rows band (bottom).
         if (hero != null) {
-            TvImage(vm.api, hero.backdropHash ?: hero.thumbHash ?: hero.posterHash, width = 1440, modifier = Modifier.fillMaxSize()) {
+            TvImage(vm.api, hero.backdropHash ?: hero.thumbHash ?: hero.posterHash, width = 1440, modifier = Modifier.fillMaxSize(), fadeInMs = 400) {
                 Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(colors.surface, colors.background))))
             }
         }
@@ -577,7 +579,7 @@ private val RAIL_EXPANDED = 232.dp
  *  dims the content behind a scrim) as soon as focus enters it — D-pad LEFT
  *  from the first card of any row lands here. */
 @Composable
-private fun TvNavRail(ui: TvUiState, selected: TvTab, onSelect: (TvTab) -> Unit) {
+private fun TvNavRail(ui: TvUiState, selected: TvTab, onSelect: (TvTab) -> Unit, onSwitchProfile: () -> Unit) {
     val colors = LocalFlixTvColors.current
     var expanded by remember { mutableStateOf(false) }
     val width by animateDpAsState(if (expanded) RAIL_EXPANDED else RAIL_COLLAPSED, tween(180), label = "railWidth")
@@ -611,17 +613,21 @@ private fun TvNavRail(ui: TvUiState, selected: TvTab, onSelect: (TvTab) -> Unit)
             verticalArrangement = Arrangement.Center,
         ) {
             Row(Modifier.padding(start = 6.dp, bottom = 22.dp), verticalAlignment = Alignment.CenterVertically) {
-                TvAvatar(ui.avatar, ui.username ?: "?", 30)
+                // Clicking the avatar reopens the profile picker (Netflix's
+                // "Changer de profil") without dropping the live session.
+                TvAvatar(ui.avatar, ui.username ?: "?", 30, onClick = onSwitchProfile)
                 if (expanded) {
-                    Text(
-                        ui.username ?: "",
-                        color = colors.text,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(start = 12.dp),
-                    )
+                    Column(Modifier.padding(start = 12.dp)) {
+                        Text(
+                            ui.username ?: "",
+                            color = colors.text,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text("Changer de profil", color = colors.textFaint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
             NavRailItem(Icons.Filled.Search, "Rechercher", selected == TvTab.SEARCH, expanded) { onSelect(TvTab.SEARCH) }

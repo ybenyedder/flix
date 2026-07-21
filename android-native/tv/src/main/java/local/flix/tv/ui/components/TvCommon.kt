@@ -33,9 +33,10 @@ fun TvImage(
     width: Int? = null,
     modifier: Modifier = Modifier,
     contentScale: androidx.compose.ui.layout.ContentScale = androidx.compose.ui.layout.ContentScale.Crop,
+    fadeInMs: Int = 0,
     fallback: @Composable () -> Unit = {},
 ) {
-    NetworkImage(url = api.imageUrl(hash, width), client = api.client, modifier = modifier, contentScale = contentScale, fallback = fallback)
+    NetworkImage(url = api.imageUrl(hash, width), client = api.client, modifier = modifier, contentScale = contentScale, fadeInMs = fadeInMs, fallback = fallback)
 }
 
 // --- metadata rendering -----------------------------------------------------

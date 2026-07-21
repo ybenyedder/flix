@@ -2,6 +2,8 @@ package local.flix.core.image
 
 import android.graphics.BitmapFactory
 import android.util.LruCache
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,6 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -74,6 +77,10 @@ fun NetworkImage(
     client: OkHttpClient,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
+    // Opt-in fade-in (ms) when the bitmap lands. Off by default: rows of
+    // cards must pop instantly while scrolling; only large hero/billboard
+    // surfaces want the soft transition.
+    fadeInMs: Int = 0,
     fallback: @Composable () -> Unit = {},
 ) {
     if (url.isNullOrBlank()) {
@@ -87,7 +94,15 @@ fun NetworkImage(
     }
     val bmp = image
     if (bmp != null) {
-        Image(bitmap = bmp, contentDescription = null, modifier = modifier.fillMaxSize(), contentScale = contentScale)
+        val alpha = if (fadeInMs > 0) {
+            // This branch only enters composition once the bitmap has landed,
+            // so the effect naturally starts the fade at arrival time — a slow
+            // load can never eat the animation window under the fallback.
+            val anim = remember(url) { Animatable(0f) }
+            LaunchedEffect(url) { anim.animateTo(1f, tween(fadeInMs)) }
+            anim.value
+        } else 1f
+        Image(bitmap = bmp, contentDescription = null, modifier = modifier.fillMaxSize().alpha(alpha), contentScale = contentScale)
     } else {
         Box(modifier) { fallback() }
     }

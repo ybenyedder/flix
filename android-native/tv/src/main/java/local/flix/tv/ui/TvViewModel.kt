@@ -224,7 +224,23 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(tab = tab) }
     }
 
+    /** Netflix "Changer de profil" from the nav rail: reopen the profile
+     *  picker without dropping the live session — BACK (or a failed login)
+     *  returns to the still-authenticated home. */
+    fun switchProfile() {
+        _ui.update { it.copy(screen = TvScreen.Home, backStack = emptyList(), tab = TvTab.HOME) }
+        loadProfiles(_ui.value.serverBase)
+    }
+
     fun back(): Boolean {
+        val state = _ui.value
+        // Profile picker opened from a live session (switchProfile): BACK
+        // returns to the app instead of exiting. During the BOOT login flow
+        // username is still null, so the historical exit behaviour is kept.
+        if ((state.phase == TvPhase.PROFILES || state.phase == TvPhase.LOGIN) && state.username != null) {
+            _ui.update { it.copy(phase = TvPhase.HOME, message = null, selectedProfile = null) }
+            return true
+        }
         val stack = _ui.value.backStack
         if (stack.isEmpty()) {
             // Netflix behaviour: BACK from a section returns to Accueil first;
