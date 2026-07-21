@@ -6,14 +6,15 @@
 // escape the row's horizontal-scroll clipping. Recently added, never-watched
 // titles wear a small « Nouveau » badge.
 
-import { memo, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { memo, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import { Play, Plus, Check, ThumbsUp, ThumbsDown, ChevronDown } from "lucide-react";
 import { api } from "@/lib/flix/api";
-import type { CatalogEntry } from "@/lib/flix/types";
+import type { CatalogEntry, MovieDetail, ShowDetail, TrickplayMeta } from "@/lib/flix/types";
 import { qualityLabel } from "@/lib/flix/quality";
 import { formatDuration, isNew } from "@/lib/flix/format";
+import { trickplayTileFor } from "@/lib/flix/playerLogic";
 import { useUiStore } from "@/store/ui";
 import { usePlayerStore } from "@/store/player";
 import { useStateStore } from "@/store/state";
@@ -21,6 +22,11 @@ import { useRecoStore } from "@/store/reco";
 
 const HOVER_DELAY_MS = 500;
 const OVERLAY_SCALE = 1.4;
+// Hover "preview": once the overlay is open, cycle through the title's
+// trickplay sprite tiles like a time-lapse — the closest 100%-offline stand-in
+// for Netflix's hover video previews. One tile every PREVIEW_TICK_MS, looping
+// over the middle of the film (skip credits/studio logos at both ends).
+const PREVIEW_TICK_MS = 700;
 // The overlay's action row (6 size-8 buttons + gaps + padding) needs ~256px;
 // 1.4× a narrow 2:3 poster tile (11vw at lg) stays under that on anything
 // below ~1660px wide, squashing the round buttons into ellipses. Floor the
@@ -41,6 +47,45 @@ function landscapeImage(item: CatalogEntry): string | null {
   if (item.backdropHash) return item.backdropHash;
   if (item.type === "movie" && item.thumbHash) return item.thumbHash;
   return item.posterHash ?? null;
+}
+
+// --- trickplay hover preview ------------------------------------------------
+// Module-level memo so re-hovering a card never refetches the detail JSON or
+// the (possibly 404) trickplay meta. The sprite JPEG itself is one request,
+// cached by the browser (private max-age + ETag). All failures resolve to
+// null — the overlay just keeps its static backdrop, exactly as before.
+const previewFileIdCache = new Map<string, number | null>();
+const previewMetaCache = new Map<number, TrickplayMeta | null>();
+
+async function resolvePreview(item: CatalogEntry): Promise<{ fileId: number; meta: TrickplayMeta } | null> {
+  const key = `${item.type}:${item.id}`;
+  let fileId = previewFileIdCache.get(key);
+  if (fileId === undefined) {
+    try {
+      if (item.type === "movie") {
+        const detail = await api.get<MovieDetail>(`/api/items/movie/${item.id}`);
+        fileId = detail.files[0]?.id ?? null;
+      } else {
+        // A show previews its very first episode — the natural "trailer".
+        const detail = await api.get<ShowDetail>(`/api/items/show/${item.id}`);
+        fileId = detail.seasons[0]?.episodes[0]?.files[0]?.id ?? null;
+      }
+    } catch {
+      fileId = null;
+    }
+    previewFileIdCache.set(key, fileId);
+  }
+  if (fileId === null) return null;
+  let meta = previewMetaCache.get(fileId);
+  if (meta === undefined) {
+    try {
+      meta = await api.get<TrickplayMeta>(`/api/trickplay/${fileId}`);
+    } catch {
+      meta = null; // sprite not generated (flag off) or kids-gated → static image
+    }
+    previewMetaCache.set(fileId, meta);
+  }
+  return meta ? { fileId, meta } : null;
 }
 
 function metaParts(item: CatalogEntry): string {
@@ -222,6 +267,27 @@ interface CardOverlayProps {
 }
 
 function CardOverlay({ item, rect, inMyList, rating, watched, match, onMouseEnter, onMouseLeave, onPlay, onToggleList, onRate, onToggleWatched, onOpenDetail }: CardOverlayProps) {
+  // Trickplay time-lapse preview. The overlay only mounts after the 500ms
+  // hover intent, so this never fires on a casual mouse pass over a rail.
+  const [preview, setPreview] = useState<{ fileId: number; meta: TrickplayMeta } | null>(null);
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    void resolvePreview(item).then((p) => {
+      if (alive && p) setPreview(p);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [item]);
+
+  useEffect(() => {
+    if (!preview) return;
+    const id = window.setInterval(() => setTick((t) => t + 1), PREVIEW_TICK_MS);
+    return () => window.clearInterval(id);
+  }, [preview]);
+
   const width = Math.max(rect.width * OVERLAY_SCALE, OVERLAY_MIN_WIDTH);
   const maxLeft = typeof window !== "undefined" ? window.innerWidth - width - 8 : rect.left;
   const left = Math.min(Math.max(8, rect.left - (width - rect.width) / 2), Math.max(8, maxLeft));
@@ -234,6 +300,25 @@ function CardOverlay({ item, rect, inMyList, rating, watched, match, onMouseEnte
   const imageUrl = image ? api.imageUrl(image, 480) : null;
   const label = qualityLabel(item.quality.height);
 
+  // Current sprite tile, scaled from the sprite's native tile size up to the
+  // overlay width. Loops over the middle 8–92% of the runtime so the preview
+  // never dwells on studio logos or end credits.
+  const previewStyle = ((): CSSProperties | null => {
+    if (!preview) return null;
+    const { meta } = preview;
+    const count = Math.max(1, Math.floor(meta.count));
+    const start = Math.floor(count * 0.08);
+    const span = Math.max(1, Math.floor(count * 0.92) - start);
+    const index = start + (tick % span);
+    const tile = trickplayTileFor(meta, index * Math.max(meta.interval, 1));
+    const scale = meta.tileWidth > 0 ? width / meta.tileWidth : 1;
+    return {
+      backgroundImage: `url(/api/trickplay/${preview.fileId}?sprite=1)`,
+      backgroundPosition: `${tile.offsetX * scale}px ${tile.offsetY * scale}px`,
+      backgroundSize: `${meta.cols * meta.tileWidth * scale}px auto`,
+    };
+  })();
+
   return (
     <div
       onMouseEnter={onMouseEnter}
@@ -245,11 +330,19 @@ function CardOverlay({ item, rect, inMyList, rating, watched, match, onMouseEnte
       style={{ position: "fixed", top, left, width, zIndex: 60 }}
       className="card-pop overflow-hidden rounded-panel bg-surface shadow-pop ring-1 ring-white/10"
     >
-      <div className="relative aspect-video w-full">
+      <div className="relative aspect-video w-full overflow-hidden">
         {imageUrl ? (
           <Image src={imageUrl} alt={item.title} fill sizes="30vw" className="object-cover" />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-surface-hover text-sm font-semibold text-muted">{item.title}</div>
+        )}
+        {/* Time-lapse preview fades in OVER the static backdrop once the
+         * sprite is ready; a soft bottom scrim keeps it cinematic. */}
+        {previewStyle && (
+          <>
+            <div aria-hidden className="animate-fade-up absolute inset-0" style={previewStyle} />
+            <div aria-hidden className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/50 to-transparent" />
+          </>
         )}
       </div>
       <div className="space-y-2 p-3">

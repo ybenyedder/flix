@@ -9,10 +9,13 @@
 // in-effect flags that pattern; setResults() below only ever runs inside an
 // async .then()/.catch() callback, which is fine).
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/flix/api";
 import type { SearchResults } from "@/lib/flix/types";
 import { useUiStore } from "@/store/ui";
+import { useRecoStore } from "@/store/reco";
+import { useCatalog } from "@/lib/flix/useCatalog";
+import { sortByAddedDesc, type CatalogItem } from "@/lib/flix/rows";
 import { ProgressiveCardGrid } from "./ProgressiveCardGrid";
 import { DiscoverSection } from "./DiscoverSection";
 import { SkeletonGrid } from "./Skeletons";
@@ -51,9 +54,33 @@ export function SearchView() {
   const loading = trimmed !== "" && current === null;
   const items = current ? [...current.movies, ...current.shows] : [];
 
+  // Empty query → Netflix's "Recherches populaires": today's Top 10 rows
+  // resolved against the catalogue, newest additions as the cold-start
+  // fallback. Gives the search screen something to tap instead of dead space.
+  const recoRows = useRecoStore((s) => s.rows);
+  const { movies, shows } = useCatalog();
+  const suggestions = useMemo<CatalogItem[]>(() => {
+    if (trimmed) return [];
+    const byKey = new Map<string, CatalogItem>();
+    for (const item of [...movies, ...shows]) byKey.set(`${item.type}:${item.id}`, item);
+    const top = recoRows
+      .filter((row) => row.id.startsWith("top10-"))
+      .flatMap((row) => row.items)
+      .map((ref) => byKey.get(`${ref.type}:${ref.id}`))
+      .filter((item): item is CatalogItem => item !== undefined);
+    const base = top.length > 0 ? top : sortByAddedDesc([...movies, ...shows]);
+    return base.slice(0, 14);
+  }, [trimmed, recoRows, movies, shows]);
+
   return (
     <div className="min-h-screen px-4 pb-20 pt-24 md:px-12">
       <h1 className="mb-6 font-display text-3xl font-bold tracking-tight text-white">{trimmed ? `Résultats pour « ${trimmed} »` : "Recherchez un titre, un genre…"}</h1>
+      {!trimmed && suggestions.length > 0 && (
+        <>
+          <h2 className="mb-4 font-display text-xl font-bold tracking-tight text-white">Recherches populaires</h2>
+          <ProgressiveCardGrid items={suggestions} gridClassName="stagger-children grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7" />
+        </>
+      )}
       {loading && <SkeletonGrid />}
       {current && items.length === 0 && <p className="text-muted">Aucun résultat. Essayez un autre titre ou lancez une demande.</p>}
       {current && items.length > 0 && (
