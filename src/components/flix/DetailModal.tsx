@@ -308,22 +308,22 @@ function DetailModalContent({ target }: { target: DetailTarget }) {
                 {detail.type === "movie" && detail.tagline && <p className="mb-2 text-sm italic text-muted">{detail.tagline}</p>}
                 {detail.synopsis && <p className="text-sm text-white">{detail.synopsis}</p>}
               </div>
-              <div className="space-y-2 text-sm text-muted">
+              <div className="space-y-2 text-sm text-white/85">
                 {detail.genres.length > 0 && (
                   <p>
-                    <span className="text-muted/70">Genres : </span>
+                    <span className="text-muted">Genres : </span>
                     {detail.genres.join(", ")}
                   </p>
                 )}
                 {detail.type === "movie" && detail.directors.length > 0 && (
                   <p>
-                    <span className="text-muted/70">Réalisation : </span>
+                    <span className="text-muted">Réalisation : </span>
                     {detail.directors.join(", ")}
                   </p>
                 )}
                 {detail.actors.length > 0 && (
                   <p>
-                    <span className="text-muted/70">Avec : </span>
+                    <span className="text-muted">Avec : </span>
                     {detail.actors
                       .slice(0, 6)
                       .map((a) => a.name)
@@ -332,7 +332,7 @@ function DetailModalContent({ target }: { target: DetailTarget }) {
                 )}
                 {detail.studio && (
                   <p>
-                    <span className="text-muted/70">Studio : </span>
+                    <span className="text-muted">Studio : </span>
                     {detail.studio}
                   </p>
                 )}
