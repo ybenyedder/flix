@@ -5,6 +5,7 @@
 // recreate the HLS session (decide() never allows those over direct play) —
 // this component only reports the selection, it has no idea what that costs.
 
+import { Check } from "lucide-react";
 import type { PlaybackAudioTrack, PlaybackSubtitleTrack } from "@/lib/flix/types";
 
 function trackLabel(language: string | null, title: string | null, fallback: string): string {
@@ -35,11 +36,14 @@ export function TrackMenu({ audioTracks, subtitles, selectedAudioIndex, selected
                 <button
                   type="button"
                   onClick={() => onSelectAudio(t.streamIndex)}
-                  className={"w-full rounded-field px-2 py-1.5 text-left transition-colors hover:bg-white/10 " + (selectedAudioIndex === t.streamIndex ? "bg-white/10 text-accent" : "")}
+                  className={"flex w-full items-center justify-between gap-2 rounded-field px-2 py-1.5 text-left transition-colors hover:bg-white/10 " + (selectedAudioIndex === t.streamIndex ? "bg-white/10 font-medium text-white" : "text-white/80 hover:text-white")}
                 >
-                  {trackLabel(t.language, t.title, `Piste ${t.streamIndex}`)}
-                  {t.channels ? ` · ${t.channels}.0` : ""}
-                  {!t.supported ? " (transcodage)" : ""}
+                  <span>
+                    {trackLabel(t.language, t.title, `Piste ${t.streamIndex}`)}
+                    {t.channels ? ` · ${t.channels}.0` : ""}
+                    {!t.supported ? " (transcodage)" : ""}
+                  </span>
+                  {selectedAudioIndex === t.streamIndex && <Check className="size-4 shrink-0" />}
                 </button>
               </li>
             ))}
@@ -54,9 +58,10 @@ export function TrackMenu({ audioTracks, subtitles, selectedAudioIndex, selected
               <button
                 type="button"
                 onClick={() => onSelectSubtitle(null)}
-                className={"w-full rounded-field px-2 py-1.5 text-left transition-colors hover:bg-white/10 " + (selectedSubtitleId === null ? "bg-white/10 text-accent" : "")}
+                className={"flex w-full items-center justify-between gap-2 rounded-field px-2 py-1.5 text-left transition-colors hover:bg-white/10 " + (selectedSubtitleId === null ? "bg-white/10 font-medium text-white" : "text-white/80 hover:text-white")}
               >
-                Désactivés
+                <span>Désactivés</span>
+                {selectedSubtitleId === null && <Check className="size-4 shrink-0" />}
               </button>
             </li>
             {subtitles.map((s) => (
@@ -64,11 +69,14 @@ export function TrackMenu({ audioTracks, subtitles, selectedAudioIndex, selected
                 <button
                   type="button"
                   onClick={() => onSelectSubtitle(s)}
-                  className={"w-full rounded-field px-2 py-1.5 text-left transition-colors hover:bg-white/10 " + (selectedSubtitleId === s.id ? "bg-white/10 text-accent" : "")}
+                  className={"flex w-full items-center justify-between gap-2 rounded-field px-2 py-1.5 text-left transition-colors hover:bg-white/10 " + (selectedSubtitleId === s.id ? "bg-white/10 font-medium text-white" : "text-white/80 hover:text-white")}
                 >
-                  {trackLabel(s.language, s.title, `Piste ${s.id}`)}
-                  {s.isSdh ? " · SME" : ""}
-                  {s.requiresBurnIn ? " (incrustés)" : ""}
+                  <span>
+                    {trackLabel(s.language, s.title, `Piste ${s.id}`)}
+                    {s.isSdh ? " · SME" : ""}
+                    {s.requiresBurnIn ? " (incrustés)" : ""}
+                  </span>
+                  {selectedSubtitleId === s.id && <Check className="size-4 shrink-0" />}
                 </button>
               </li>
             ))}

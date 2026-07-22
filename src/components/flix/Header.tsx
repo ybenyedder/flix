@@ -329,7 +329,14 @@ export function Header() {
           </button>
           {menuOpen && (
             <div className="absolute right-0 top-full mt-2 w-64 glass rounded-panel p-2 shadow-pop animate-scale-in origin-top-right">
-              <p className="truncate px-2 py-1.5 text-sm font-semibold text-white">{username}</p>
+              <div className="flex items-center gap-2.5 px-2 py-2">
+                <ProfileAvatar preset={avatar ?? "red"} name={username ?? "?"} size={36} />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-white">{username}</p>
+                  <p className="text-xs text-muted">{isKids ? "Profil enfant" : isAdmin ? "Administrateur" : "Profil"}</p>
+                </div>
+              </div>
+              <div className="my-1 divider-fade" />
               <button
                 type="button"
                 onClick={() => {
