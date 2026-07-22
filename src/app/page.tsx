@@ -34,6 +34,19 @@ const PlayerView = dynamic(() => import("@/components/flix/PlayerView").then((m)
 
 const VALID_VIEWS: ViewId[] = ["home", "movies", "shows", "mylist", "search", "stats", "settings", "requests"];
 
+// Announced to screen readers on each view switch — an SPA change is otherwise
+// silent (no page reload), so a keyboard/SR user can't tell the content changed.
+const VIEW_LABELS: Record<ViewId, string> = {
+  home: "Accueil",
+  movies: "Films",
+  shows: "Séries",
+  mylist: "Ma liste",
+  search: "Recherche",
+  stats: "Mon activité",
+  settings: "Paramètres",
+  requests: "Demandes",
+};
+
 function FlixShell() {
   const view = useUiStore((s) => s.view);
   const navigate = useUiStore((s) => s.navigate);
@@ -76,6 +89,11 @@ function FlixShell() {
       >
         Passer au contenu
       </a>
+      {/* Politely announces the current view on navigation (SPA route changes
+       * are otherwise inaudible to screen readers). */}
+      <div aria-live="polite" className="sr-only">
+        {VIEW_LABELS[view]}
+      </div>
       <HistoryManager />
       <Header />
       <MobileNav />

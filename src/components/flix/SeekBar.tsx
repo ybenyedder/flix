@@ -61,7 +61,24 @@ export function SeekBar({ currentTime, duration, onSeek, chapters, trickplay, tr
       aria-valuemin={0}
       aria-valuemax={Math.max(0, Math.round(duration))}
       aria-valuenow={Math.round(currentTime)}
+      // Screen readers announce a bare seconds count from aria-valuenow; give
+      // them the readable "1:23 sur 5:00" instead.
+      aria-valuetext={duration > 0 ? `${formatTime(currentTime)} sur ${formatTime(duration)}` : undefined}
       tabIndex={0}
+      // Left/Right (±10 s) and Up/Down (volume) come from the player's global key
+      // handler even while this slider is focused; add the slider conventions it
+      // lacks so the scrubber is fully operable by keyboard (WCAG 2.1.1).
+      onKeyDown={(e) => {
+        if (duration <= 0) return;
+        let next: number;
+        if (e.key === "Home") next = 0;
+        else if (e.key === "End") next = duration;
+        else if (e.key === "PageDown") next = currentTime - 60;
+        else if (e.key === "PageUp") next = currentTime + 60;
+        else return;
+        e.preventDefault();
+        onSeek(Math.min(duration, Math.max(0, next)));
+      }}
       className="group/seek relative h-1.5 w-full cursor-pointer touch-none rounded-full bg-white/25 transition-[height] hover:h-2"
       onPointerDown={(e) => {
         setDragging(true);
