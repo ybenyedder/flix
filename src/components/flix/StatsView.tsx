@@ -5,8 +5,10 @@
 // Available to every profile; the server scopes everything to the session user.
 
 import { Fragment, useEffect, useState, type ReactNode } from "react";
+import Image from "next/image";
 import { CalendarDays, CalendarRange, Clock, CircleCheck, Check } from "lucide-react";
 import { api, ApiError } from "@/lib/flix/api";
+import { useCatalog } from "@/lib/flix/useCatalog";
 import { formatDuration } from "@/lib/flix/format";
 
 interface GenreStat {
@@ -58,6 +60,13 @@ function StatCard({ icon, label, value }: { icon: ReactNode; label: string; valu
 export function StatsView() {
   const [stats, setStats] = useState<UserStats | null>(null);
   const [error, setError] = useState("");
+  // Poster lookup so each history row can carry its artwork — this is a
+  // poster-driven app, a bare text list is the least "crafted" surface in it.
+  const { movies, shows } = useCatalog();
+  const posterFor = (topType: "movie" | "show", topId: number): string | null => {
+    const item = (topType === "movie" ? movies : shows).find((i) => i.id === topId);
+    return item?.posterHash ? api.imageUrl(item.posterHash, 480) : null;
+  };
 
   useEffect(() => {
     api
@@ -127,18 +136,25 @@ export function StatsView() {
                   {stats.history.map((entry, index) => (
                     <Fragment key={`${entry.createdAt}-${index}`}>
                       {index > 0 && <li aria-hidden className="divider-fade my-1" />}
-                    <li className="flex items-center justify-between gap-4 py-2.5">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm text-white">
-                          {entry.title}
-                          {entry.subtitle && <span className="text-muted"> · {entry.subtitle}</span>}
-                        </p>
+                    <li className="flex items-center gap-3 py-2">
+                      <div className="relative aspect-[2/3] w-9 shrink-0 overflow-hidden rounded-[6px] bg-surface-hover">
+                        {posterFor(entry.topType, entry.topId) && (
+                          <Image src={posterFor(entry.topType, entry.topId) as string} alt="" fill sizes="36px" className="object-cover" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="min-w-0 truncate text-sm text-white">
+                            {entry.title}
+                            {entry.subtitle && <span className="text-muted"> · {entry.subtitle}</span>}
+                          </p>
+                          <span className={"inline-flex shrink-0 items-center gap-1 text-[11px] " + (entry.kind === "complete" ? "text-muted" : "text-muted/60")}>
+                            {entry.kind === "complete" && <Check className="size-3 text-match" />}
+                            {entry.kind === "complete" ? "Terminé" : "Abandonné"}
+                          </span>
+                        </div>
                         <p className="text-xs text-muted">{formatEventDate(entry.createdAt)}</p>
                       </div>
-                      <span className={"flex shrink-0 items-center gap-1.5 text-xs " + (entry.kind === "complete" ? "text-white" : "text-muted")}>
-                        {entry.kind === "complete" && <Check className="size-3.5 text-match" />}
-                        {entry.kind === "complete" ? "Terminé" : "Abandonné"}
-                      </span>
                     </li>
                     </Fragment>
                   ))}

@@ -7,7 +7,7 @@
 // zero watch history should still see a populated, if impersonal, Home.
 
 import { useMemo } from "react";
-import { DownloadCloud, FolderOpen, AlertTriangle } from "lucide-react";
+import { DownloadCloud, FolderOpen, AlertTriangle, X } from "lucide-react";
 import { useCatalog } from "@/lib/flix/useCatalog";
 import { useLibraryStore } from "@/store/library";
 import { useStateStore } from "@/store/state";
@@ -53,32 +53,31 @@ function ArrPromoBanner({ topOffset = false }: { topOffset?: boolean }) {
 
   if (!loaded || !isAdmin || enabled || dismissed) return null;
 
+  // A slim, dismissible strip — NOT a full-bleed card. On a populated Home it
+  // slides in under the billboard, and a boxed panel there snapped the eye out
+  // of the cinematic hero→rows flow; kept no taller than a row header.
   return (
     <div className={"px-4 md:px-12 " + (topOffset ? "pt-20" : "")}>
-      <div className="glass flex flex-col gap-3 rounded-panel p-4 md:flex-row md:items-center md:justify-between md:gap-6">
-        <div className="flex items-start gap-3.5">
-          <span className="grid size-10 shrink-0 place-items-center rounded-field bg-accent/15 text-accent">
-            <DownloadCloud className="size-5" />
-          </span>
-          <div>
-            <p className="text-sm font-semibold text-white">Nouveau : demandez films et séries depuis Flix</p>
-            <p className="mt-0.5 text-xs leading-relaxed text-muted">
-              Connectez Sonarr, Radarr, Prowlarr et Bazarr pour télécharger et sous-titrer automatiquement les titres absents de votre bibliothèque.
-            </p>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={() => navigate("settings")}
-            className="rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white transition duration-200 ease-out-quart hover:bg-accent-hover active:scale-[0.97]"
-          >
-            Configurer
-          </button>
-          <button type="button" onClick={() => void dismissBanner()} className="rounded-full px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:text-white">
-            Ignorer
-          </button>
-        </div>
+      <div className="glass flex items-center gap-3 rounded-full py-2 pl-4 pr-2">
+        <DownloadCloud className="size-4 shrink-0 text-accent" />
+        <p className="min-w-0 flex-1 truncate text-xs font-medium text-white/85">
+          Téléchargez et sous-titrez automatiquement les titres manquants — Sonarr, Radarr, Prowlarr, Bazarr.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate("settings")}
+          className="shrink-0 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white transition duration-200 ease-out-quart hover:bg-white/20 active:scale-[0.97]"
+        >
+          Configurer
+        </button>
+        <button
+          type="button"
+          onClick={() => void dismissBanner()}
+          aria-label="Ignorer"
+          className="grid size-6 shrink-0 place-items-center rounded-full text-muted transition-colors hover:bg-white/10 hover:text-white"
+        >
+          <X className="size-3.5" />
+        </button>
       </div>
     </div>
   );
