@@ -223,7 +223,13 @@ export function HomeView() {
   return (
     <div className="pb-20">
       {billboard ? <BillboardHero item={billboard} topRank={billboardRank} /> : <div className="h-24" />}
-      <div className="relative z-10 -mt-6 space-y-8 stagger-children md:-mt-24">
+      {/* Overlap the rows onto the hero's ambient glow — but the hero content
+       * sits at bottom-12% of a height that scales with viewport WIDTH (60vw),
+       * so a big fixed pull-up (the old -mt-24) ate the Lecture/Plus-d'infos
+       * buttons at tablet/small-laptop widths where the hero is short. Kept
+       * gentle (clears the buttons from 402px up to 1920px) and a touch deeper
+       * only at lg, where the hero is tall enough to spare the room. */}
+      <div className="relative z-10 -mt-8 space-y-8 stagger-children lg:-mt-16">
         <ArrPromoBanner />
         {continueWatching.length > 0 && (
           <Row
