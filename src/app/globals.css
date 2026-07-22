@@ -513,6 +513,30 @@ input[type="range"].volume-slider::-moz-range-progress {
   }
 }
 
+/* --- reduced transparency -------------------------------------------------
+ * The UI leans on frosted `glass` panels (header, popovers, dialogs, badges).
+ * When a user asks the OS to reduce transparency, swap the translucent+blurred
+ * surface for a solid one so anything behind it can never bleed through and hurt
+ * legibility. Unlayered, so it wins over the @utility. */
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    background: var(--surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* --- increased contrast ---------------------------------------------------
+ * The design uses quiet greys (muted text) and hairline white borders on
+ * purpose. For users who ask the OS for more contrast, lift the secondary text
+ * and thicken those hairlines — one variable change propagates everywhere. */
+@media (prefers-contrast: more) {
+  :root {
+    --muted: #cbcbd6;
+    --glass-border: rgb(255 255 255 / 0.3);
+  }
+}
+
 /* --- subtitle cues --------------------------------------------------------
  * The native WebVTT renderer is used (a <track> on the <video>). Give cues a
  * legible, cinema-style default: white, heavy, with a solid shadow so they
