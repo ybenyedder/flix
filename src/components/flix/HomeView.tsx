@@ -224,7 +224,7 @@ export function HomeView() {
             renderItem={(entry) => <ContinueWatchingCard entry={entry} />}
           />
         )}
-        {myListItems.length > 0 && <Row title="Ma liste" items={myListItems} keyFor={keyOf} renderItem={(item) => <Card item={item} />} />}
+        {myListItems.length > 0 && <Row title="Ma liste" items={myListItems} keyFor={keyOf} renderItem={(item) => <Card item={item} caption="mobile" />} />}
 
         {top10Movies.length >= TOP10_MIN && (
           <Row
@@ -246,27 +246,27 @@ export function HomeView() {
         )}
 
         {forYouRow && itemsFor(forYouRow).length > 0 && (
-          <Row title={forYouRow.title} items={itemsFor(forYouRow)} keyFor={keyOf} renderItem={(item) => <Card item={item} />} />
+          <Row title={forYouRow.title} items={itemsFor(forYouRow)} keyFor={keyOf} renderItem={(item) => <Card item={item} caption="mobile" />} />
         )}
 
         {becauseRows.map((row) => {
           const items = itemsFor(row);
-          return items.length > 0 && <Row key={row.id} title={row.title} items={items} keyFor={keyOf} renderItem={(item) => <Card item={item} />} />;
+          return items.length > 0 && <Row key={row.id} title={row.title} items={items} keyFor={keyOf} renderItem={(item) => <Card item={item} caption="mobile" />} />;
         })}
 
         {engineGenreRows.map((row) => {
           const items = itemsFor(row);
-          return items.length > 0 && <Row key={row.id} title={row.title} items={items} keyFor={keyOf} renderItem={(item) => <Card item={item} />} />;
+          return items.length > 0 && <Row key={row.id} title={row.title} items={items} keyFor={keyOf} renderItem={(item) => <Card item={item} caption="mobile" />} />;
         })}
         {fallbackGenreRows.map(
           (row) =>
-            row.items.length > 0 && <Row key={row.genre} title={row.genre} items={row.items} keyFor={keyOf} renderItem={(item) => <Card item={item} />} />,
+            row.items.length > 0 && <Row key={row.genre} title={row.genre} items={row.items} keyFor={keyOf} renderItem={(item) => <Card item={item} caption="mobile" />} />,
         )}
 
-        {recentlyAdded.length > 0 && <Row title="Ajoutés récemment" items={recentlyAdded} keyFor={keyOf} renderItem={(item) => <Card item={item} />} />}
+        {recentlyAdded.length > 0 && <Row title="Ajoutés récemment" items={recentlyAdded} keyFor={keyOf} renderItem={(item) => <Card item={item} caption="mobile" />} />}
 
         {discoverRow && itemsFor(discoverRow).length > 0 && (
-          <Row title={discoverRow.title} items={itemsFor(discoverRow)} keyFor={keyOf} renderItem={(item) => <Card item={item} />} />
+          <Row title={discoverRow.title} items={itemsFor(discoverRow)} keyFor={keyOf} renderItem={(item) => <Card item={item} caption="mobile" />} />
         )}
       </div>
     </div>

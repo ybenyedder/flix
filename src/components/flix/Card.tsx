@@ -101,7 +101,12 @@ function metaParts(item: CatalogEntry): string {
   return parts.join(" · ");
 }
 
-function CardBase({ item }: { item: CatalogEntry }) {
+// `caption`: "always" shows the title/meta line under the poster at every size
+// (browse/search GRIDS, where scanning by title is the point). "mobile" hides it
+// from md up — in the home CAROUSELS the hover overlay already carries the title,
+// so on desktop the rows become a clean wall of artwork (Netflix-style) while
+// touch users, who get no hover, keep the caption.
+function CardBase({ item, caption = "always" }: { item: CatalogEntry; caption?: "always" | "mobile" }) {
   const ref = useRef<HTMLDivElement>(null);
   const hoverTimer = useRef<number | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -213,7 +218,7 @@ function CardBase({ item }: { item: CatalogEntry }) {
         {tileQuality && <span className="absolute right-1.5 top-1.5 rounded-full glass px-2 py-px text-[10px] font-bold text-white">{tileQuality}</span>}
       </div>
       {/* Title + meta ALWAYS visible under the cover (not only on hover). */}
-      <div className="mt-1.5 px-0.5">
+      <div className={"mt-1.5 px-0.5" + (caption === "mobile" ? " md:hidden" : "")}>
         <p className="line-clamp-1 text-[13px] font-semibold text-white">{item.title}</p>
         {meta && <p className="line-clamp-1 text-[11px] text-muted/80">{meta}</p>}
       </div>
