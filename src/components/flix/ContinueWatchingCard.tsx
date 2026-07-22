@@ -77,7 +77,7 @@ function ContinueWatchingCardBase({ entry }: { entry: ProgressSummary }) {
             openDetail({ type: entry.topType, id: entry.topId });
           }}
           aria-label="Plus d’infos"
-          className="absolute right-2 top-2 grid size-7 place-items-center rounded-full bg-black/60 text-white opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+          className="absolute right-2 top-2 grid size-7 place-items-center rounded-full bg-black/60 text-white opacity-0 transition-[opacity,transform] focus-visible:opacity-100 group-hover:opacity-100 active:scale-90"
         >
           <Info className="size-4" />
         </button>
@@ -90,7 +90,7 @@ function ContinueWatchingCardBase({ entry }: { entry: ProgressSummary }) {
           }}
           aria-label="Retirer de Continuer à regarder"
           title="Retirer de Continuer à regarder"
-          className="absolute right-10 top-2 grid size-7 place-items-center rounded-full bg-black/60 text-white opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+          className="absolute right-10 top-2 grid size-7 place-items-center rounded-full bg-black/60 text-white opacity-0 transition-[opacity,transform] focus-visible:opacity-100 group-hover:opacity-100 active:scale-90"
         >
           <X className="size-4" />
         </button>

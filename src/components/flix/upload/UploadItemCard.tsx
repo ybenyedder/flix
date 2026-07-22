@@ -47,7 +47,9 @@ function destinationLabel(item: UploadItem): string | null {
 }
 
 function iconBtn(): string {
-  return "grid size-8 place-items-center rounded-full text-white transition-colors hover:bg-white/15";
+  // Same tactile press (scale-down on :active) as icon-btn / player-btn so every
+  // round icon button in the app feels consistent under the finger.
+  return "grid size-8 place-items-center rounded-full text-white transition duration-150 ease-out-quart hover:bg-white/15 active:scale-90";
 }
 
 export function UploadItemCard({ item }: { item: UploadItem }) {
