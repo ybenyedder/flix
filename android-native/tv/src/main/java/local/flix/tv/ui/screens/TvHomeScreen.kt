@@ -327,12 +327,26 @@ private fun TvBrowseContent(vm: TvViewModel, ui: TvUiState) {
         )
 
         if (rows.isEmpty()) {
-            Text(
-                emptyTabMessage(tab),
-                color = colors.textMuted,
-                fontSize = 17.sp,
-                modifier = Modifier.align(Alignment.BottomStart).padding(start = CONTENT_START, bottom = 120.dp),
-            )
+            // Centred (the old BottomStart anchor slid it UNDER the expanded
+            // nav rail's scrim), with a focusable escape hatch: an empty tab
+            // has nothing else to focus, which trapped the focus inside the
+            // rail — stuck expanded, covering this very message.
+            Column(
+                Modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+            ) {
+                Text(emptyTabMessage(tab), color = colors.textMuted, fontSize = 17.sp)
+                if (tab != TvTab.HOME) {
+                    Surface(
+                        onClick = { vm.selectTab(TvTab.HOME) },
+                        colors = ClickableSurfaceDefaults.colors(containerColor = colors.chip, focusedContainerColor = colors.accent),
+                        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(50)),
+                    ) {
+                        Text("Parcourir le catalogue", color = colors.text, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp))
+                    }
+                }
+            }
         } else {
             CompositionLocalProvider(LocalBringIntoViewSpec provides NoBringIntoView) {
                 LazyColumn(
