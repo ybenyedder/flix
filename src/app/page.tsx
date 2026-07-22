@@ -68,17 +68,27 @@ function FlixShell() {
 
   return (
     <div className="app-shell min-h-screen">
+      {/* Bypass-blocks (WCAG 2.4.1): a keyboard user can jump past the fixed
+       * header's ~8 controls straight to the view. Hidden until focused. */}
+      <a
+        href="#main-content"
+        className="sr-only rounded-full focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-black"
+      >
+        Passer au contenu
+      </a>
       <HistoryManager />
       <Header />
       <MobileNav />
-      {view === "home" && <HomeView />}
-      {view === "movies" && <BrowseView kind="movie" />}
-      {view === "shows" && <BrowseView kind="show" />}
-      {view === "mylist" && <MyListView />}
-      {view === "search" && <SearchView />}
-      {view === "stats" && <StatsView />}
-      {view === "settings" && <SettingsView />}
-      {view === "requests" && <RequestsView />}
+      <main id="main-content" tabIndex={-1} className="outline-none">
+        {view === "home" && <HomeView />}
+        {view === "movies" && <BrowseView kind="movie" />}
+        {view === "shows" && <BrowseView kind="show" />}
+        {view === "mylist" && <MyListView />}
+        {view === "search" && <SearchView />}
+        {view === "stats" && <StatsView />}
+        {view === "settings" && <SettingsView />}
+        {view === "requests" && <RequestsView />}
+      </main>
       <DetailModal />
       {playbackRequest && <PlayerView />}
       <UploadManager />

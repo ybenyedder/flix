@@ -148,7 +148,7 @@ export function StatsView() {
                             {entry.title}
                             {entry.subtitle && <span className="text-muted"> · {entry.subtitle}</span>}
                           </p>
-                          <span className={"inline-flex shrink-0 items-center gap-1 text-[11px] " + (entry.kind === "complete" ? "text-muted" : "text-muted/60")}>
+                          <span className={"inline-flex shrink-0 items-center gap-1 text-[11px] " + (entry.kind === "complete" ? "text-muted" : "text-muted/85")}>
                             {entry.kind === "complete" && <Check className="size-3 text-match" />}
                             {entry.kind === "complete" ? "Terminé" : "Abandonné"}
                           </span>

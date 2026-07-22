@@ -103,7 +103,7 @@ export function RequestVersionModal({ item, onClose, onRequested }: { item: ArrD
             <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-muted">
               <Loader2 className="size-6 animate-spin text-accent" />
               <span>Recherche des versions disponibles…</span>
-              <span className="text-xs text-muted/70">{"Balayage de tous les indexeurs — ça peut prendre jusqu'à une minute."}</span>
+              <span className="text-xs text-muted">{"Balayage de tous les indexeurs — ça peut prendre jusqu'à une minute."}</span>
             </div>
           )}
 
