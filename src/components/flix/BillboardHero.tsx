@@ -56,7 +56,7 @@ export function BillboardHero({ item, topRank = null }: { item: CatalogEntry; to
               <Image src={logo} alt={item.title} fill sizes="480px" className="object-contain object-left drop-shadow-lg" />
             </div>
           ) : (
-            <h1 className="mb-4 font-display text-4xl font-black tracking-tight text-white drop-shadow-lg md:text-6xl">{item.title}</h1>
+            <h1 className="mb-4 font-display text-5xl font-black leading-[0.95] tracking-[-0.02em] text-white drop-shadow-xl md:text-6xl">{item.title}</h1>
           )}
 
           {/* Netflix "N°X aujourd'hui" flag: shown only when the featured title
@@ -75,16 +75,16 @@ export function BillboardHero({ item, topRank = null }: { item: CatalogEntry; to
           )}
 
           {/* Metadata line: match %, year, runtime/seasons, genres, badges. */}
-          <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm font-medium text-white/85 drop-shadow md:text-[15px]">
-            {match !== null && <span className="font-bold text-green-500">{match}% de correspondance</span>}
-            {item.year && <span>{item.year}</span>}
+          <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm font-medium text-white/75 drop-shadow md:text-[15px]">
+            {match !== null && <span className="font-bold text-match">{match}% de correspondance</span>}
+            {item.year && <span className="text-white/80">{item.year}</span>}
             {/* duration = 0 means "ffprobe failed", not a 0-minute film */}
             {item.type === "movie"
-              ? item.duration > 0 && <span>{formatDuration(item.duration)}</span>
-              : item.seasonCount > 0 && <span>{item.seasonCount} saison{item.seasonCount > 1 ? "s" : ""}</span>}
-            {genres.length > 0 && <span className="text-white/60">{genres.join(" · ")}</span>}
-            {label && <span className="rounded-full glass px-2 py-0.5 text-[11px] font-bold">{label}</span>}
-            {item.quality.hdr && <span className="rounded-full glass px-2 py-0.5 text-[11px] font-bold">HDR</span>}
+              ? item.duration > 0 && <span className="text-white/80">{formatDuration(item.duration)}</span>
+              : item.seasonCount > 0 && <span className="text-white/80">{item.seasonCount} saison{item.seasonCount > 1 ? "s" : ""}</span>}
+            {genres.length > 0 && <span className="text-white/55">{genres.join(" · ")}</span>}
+            {label && <span className="rounded-full glass px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">{label}</span>}
+            {item.quality.hdr && <span className="rounded-full glass px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">HDR</span>}
           </div>
 
           {item.synopsis && <p className="mb-6 line-clamp-2 max-w-xl text-sm text-white/85 drop-shadow md:line-clamp-3 md:text-lg">{item.synopsis}</p>}
@@ -93,14 +93,14 @@ export function BillboardHero({ item, topRank = null }: { item: CatalogEntry; to
             <button
               type="button"
               onClick={() => openPlayer({ kind: item.type, id: item.id, title: item.title })}
-              className="flex items-center gap-2 rounded-full bg-white px-6 py-2.5 text-[15px] font-bold text-black transition duration-200 ease-out-quart hover:scale-[1.03] hover:bg-white/85 hover:shadow-glow md:px-8 md:py-3 md:text-base"
+              className="flex items-center gap-2 rounded-full bg-white px-6 py-2.5 text-[15px] font-bold text-black transition duration-200 ease-out-quart hover:scale-[1.03] hover:bg-white/85 hover:shadow-glow active:scale-[0.98] md:px-8 md:py-3 md:text-base"
             >
               <Play className="size-5 fill-black" /> {resumable ? "Reprendre" : "Lecture"}
             </button>
             <button
               type="button"
               onClick={() => openDetail({ type: item.type, id: item.id })}
-              className="flex items-center gap-2 rounded-full glass px-6 py-2.5 text-[15px] font-bold text-white transition-colors hover:bg-white/25 md:px-8 md:py-3 md:text-base"
+              className="flex items-center gap-2 rounded-full glass px-6 py-2.5 text-[15px] font-bold text-white transition duration-200 ease-out-quart hover:scale-[1.03] hover:bg-white/25 active:scale-[0.98] md:px-8 md:py-3 md:text-base"
             >
               <Info className="size-5" /> Plus d’infos
             </button>

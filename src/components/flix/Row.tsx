@@ -64,7 +64,7 @@ export function Row<T>({
   return (
     <section className="group/section relative py-3">
       <div className="mb-2.5 flex items-end justify-between px-4 md:px-12">
-        <h2 className="font-display text-xl font-bold tracking-tight text-white md:text-[22px]">{title}</h2>
+        <h2 className="font-display text-xl font-bold tracking-tight text-white md:text-2xl">{title}</h2>
         {pageCount > 1 && pageCount <= 15 && (
           <div aria-hidden className="mb-1 hidden items-center gap-0.5 opacity-0 transition-opacity duration-300 group-hover/section:opacity-100 md:flex">
             {Array.from({ length: pageCount }).map((_, i) => (

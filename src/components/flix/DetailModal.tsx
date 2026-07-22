@@ -292,7 +292,7 @@ function DetailModalContent({ target }: { target: DetailTarget }) {
             <div className="grid gap-6 p-6 md:grid-cols-[2fr_1fr]">
               <div>
                 <div className="mb-3 flex flex-wrap items-center gap-3 text-sm text-muted">
-                  {detail.year && <span className="font-semibold text-green-500">{detail.year}</span>}
+                  {detail.year && <span className="font-semibold text-white/90">{detail.year}</span>}
                   {detail.contentRating && <span className="rounded-full border border-white/30 px-1.5 py-0.5 text-xs">{detail.contentRating}</span>}
                   {/* duration = 0 means "ffprobe failed", not a 0-minute film */}
                   {detail.type === "movie" ? (

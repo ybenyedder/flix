@@ -49,21 +49,27 @@ function ArrPromoBanner({ topOffset = false }: { topOffset?: boolean }) {
 
   return (
     <div className={"px-4 md:px-12 " + (topOffset ? "pt-20" : "")}>
-      <div className="glass flex flex-col gap-3 rounded-panel p-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-start gap-3">
-          <DownloadCloud className="mt-0.5 size-6 shrink-0 text-accent" />
+      <div className="glass flex flex-col gap-3 rounded-panel p-4 md:flex-row md:items-center md:justify-between md:gap-6">
+        <div className="flex items-start gap-3.5">
+          <span className="grid size-10 shrink-0 place-items-center rounded-field bg-accent/15 text-accent">
+            <DownloadCloud className="size-5" />
+          </span>
           <div>
             <p className="text-sm font-semibold text-white">Nouveau : demandez films et séries depuis Flix</p>
-            <p className="text-xs text-muted">
+            <p className="mt-0.5 text-xs leading-relaxed text-muted">
               Connectez Sonarr, Radarr, Prowlarr et Bazarr pour télécharger et sous-titrer automatiquement les titres absents de votre bibliothèque.
             </p>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <button type="button" onClick={() => navigate("settings")} className="rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent-hover">
+          <button
+            type="button"
+            onClick={() => navigate("settings")}
+            className="rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white transition duration-200 ease-out-quart hover:bg-accent-hover active:scale-[0.97]"
+          >
             Configurer
           </button>
-          <button type="button" onClick={() => void dismissBanner()} className="rounded-full px-3 py-1.5 text-xs text-muted transition-colors hover:text-white">
+          <button type="button" onClick={() => void dismissBanner()} className="rounded-full px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:text-white">
             Ignorer
           </button>
         </div>

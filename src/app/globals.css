@@ -9,6 +9,7 @@
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-muted: var(--muted);
+  --color-match: var(--match);
 
   /* Font stacks — the next/font variables are injected on <html> in layout.tsx,
    * with the old system stack kept as a fallback so a font-load failure never
@@ -58,6 +59,10 @@
   --accent: #e50914;
   --accent-hover: #f6121d;
   --muted: #a8a8b8;
+  /* The "% de correspondance" green — the crisp emerald streaming apps use for
+   * a taste match (brighter/cooler than a generic green-500), reserved for that
+   * one signal so it always reads as "this is for you". */
+  --match: #46d369;
 
   /* Frosted-glass surface for anything that floats over content (header when
    * scrolled, popovers, dialogs, the upload dock). */
