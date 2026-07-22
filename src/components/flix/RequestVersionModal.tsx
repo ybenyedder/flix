@@ -107,7 +107,7 @@ export function RequestVersionModal({ item, onClose, onRequested }: { item: ArrD
             </div>
           )}
 
-          {!loading && error && <p className="py-8 text-center text-sm text-red-400">{error}</p>}
+          {!loading && error && <p className="py-8 text-center text-sm text-accent">{error}</p>}
 
           {!loading && !error && options && options.languages.length === 0 && (
             <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted">
