@@ -79,7 +79,10 @@ fun qualityLabel(height: Int?, hdr: Boolean): String? {
 /** "2 h 14" / "48 min" from a runtime in seconds (movies only). */
 fun formatRuntime(seconds: Double): String? {
     if (seconds <= 0) return null
-    val totalMin = (seconds / 60).toInt()
+    // Round like the web's formatDuration (35 s reads « 1 min »), and never
+    // surface « 0 min » — a zero here means ffprobe failed, not a 0-min film.
+    val totalMin = Math.round(seconds / 60.0).toInt()
+    if (totalMin <= 0) return null
     val h = totalMin / 60
     val m = totalMin % 60
     return if (h > 0) "${h} h ${m.toString().padStart(2, '0')}" else "$m min"
@@ -112,7 +115,7 @@ private val AVATAR_GRADIENTS: Map<String, Pair<Color, Color>> = mapOf(
 )
 
 @Composable
-fun TvAvatar(preset: String?, name: String, size: Int, onClick: (() -> Unit)? = null) {
+fun TvAvatar(preset: String?, name: String, size: Int, onClick: (() -> Unit)? = null, modifier: Modifier = Modifier) {
     val (c0, c1) = AVATAR_GRADIENTS[preset] ?: AVATAR_GRADIENTS.getValue("red")
     val content: @Composable () -> Unit = {
         Box(
@@ -125,13 +128,14 @@ fun TvAvatar(preset: String?, name: String, size: Int, onClick: (() -> Unit)? = 
     if (onClick != null) {
         Surface(
             onClick = onClick,
+            modifier = modifier,
             shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape((size * 0.14f).dp)),
             colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color.Transparent),
             scale = ClickableSurfaceDefaults.scale(focusedScale = 1.12f),
             border = ClickableSurfaceDefaults.border(focusedBorder = androidx.tv.material3.Border(BorderStroke(3.dp, Color.White), shape = RoundedCornerShape((size * 0.14f).dp))),
         ) { content() }
     } else {
-        Box(Modifier.clip(RoundedCornerShape((size * 0.14f).dp))) { content() }
+        Box(modifier.clip(RoundedCornerShape((size * 0.14f).dp))) { content() }
     }
 }
 

@@ -17,17 +17,29 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.tv.material3.Icon
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -117,10 +129,11 @@ private fun TvHeaderArt(vm: TvViewModel, item: CatalogItem, matchPct: Int? = nul
 }
 
 @Composable
-private fun TvActionButton(label: String, primary: Boolean, onClick: () -> Unit) {
+private fun TvActionButton(label: String, icon: ImageVector, primary: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val colors = LocalFlixTvColors.current
     Surface(
         onClick = onClick,
+        modifier = modifier,
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (primary) colors.text else colors.chip,
             focusedContainerColor = colors.accent,
@@ -128,13 +141,18 @@ private fun TvActionButton(label: String, primary: Boolean, onClick: () -> Unit)
         shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(6.dp)),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
     ) {
-        Text(
-            label,
-            color = if (primary) colors.background else colors.text,
-            fontWeight = FontWeight.Bold,
-            fontSize = 16.sp,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 13.dp),
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(horizontal = 22.dp, vertical = 13.dp),
+        ) {
+            // Vector icons, not emoji glyphs: the system emoji font renders
+            // them in colour (orange thumbs…) which clashes with the theme.
+            Icon(icon, contentDescription = null, tint = if (primary) colors.background else colors.text, modifier = Modifier.size(18.dp))
+            if (label.isNotEmpty()) {
+                Text(label, color = if (primary) colors.background else colors.text, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            }
+        }
     }
 }
 
@@ -143,10 +161,18 @@ private fun TvActionRow(vm: TvViewModel, type: String, id: Int, playLabel: Strin
     val inList = vm.isInMyList(type, id)
     val rating = vm.ratingFor(type, id)
     val liked = rating == 1 || rating == 2
+    // Initial focus on « Lecture » once the header composes: without it the
+    // sheet opens with NO focused element and the first CENTER press is lost —
+    // play looked broken. (Same fix as the profile gate.)
+    val playFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        runCatching { playFocus.requestFocus() }
+    }
     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        TvActionButton("▶  $playLabel", primary = true, onClick = onPlay)
-        TvActionButton(if (inList) "✓  Ma liste" else "+  Ma liste", primary = false) { vm.toggleMyList(type, id) }
-        TvActionButton(if (liked) "👍  Aimé" else "👍", primary = false) { vm.setRating(type, id, if (liked) 0 else 1) }
+        TvActionButton(playLabel, Icons.Filled.PlayArrow, primary = true, onClick = onPlay, modifier = Modifier.focusRequester(playFocus))
+        TvActionButton("Ma liste", if (inList) Icons.Filled.Check else Icons.Filled.Add, primary = false, onClick = { vm.toggleMyList(type, id) })
+        TvActionButton(if (liked) "Aimé" else "", Icons.Filled.ThumbUp, primary = false, onClick = { vm.setRating(type, id, if (liked) 0 else 1) })
     }
 }
 

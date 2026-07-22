@@ -19,6 +19,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -49,7 +56,9 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.ui.PlayerView
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.Icon
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import kotlinx.coroutines.delay
@@ -396,20 +405,21 @@ fun TvPlayerScreen(vm: TvViewModel, ui: TvUiState, screen: TvScreen.Player) {
                     }
                     Spacer(Modifier.height(18.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        TvCtrlButton("‹", onClick = { vm.back() })
-                        TvCtrlButton("⏪", onClick = { vm.player.seekBy(-10_000L) })
+                        TvCtrlButton(Icons.AutoMirrored.Filled.ArrowBack, "Retour", onClick = { vm.back() })
+                        TvCtrlButton(Icons.Filled.Replay10, "Reculer de 10 secondes", onClick = { vm.player.seekBy(-10_000L) })
                         TvCtrlButton(
-                            if (snapshot.isPlaying) "⏸" else "▶",
+                            if (snapshot.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            if (snapshot.isPlaying) "Pause" else "Lecture",
                             onClick = { vm.player.togglePlay(); interactions++ },
                             modifier = Modifier.focusRequester(playPauseFocus),
                             big = true,
                         )
-                        TvCtrlButton("⏩", onClick = { vm.player.seekBy(10_000L) })
+                        TvCtrlButton(Icons.Filled.Forward10, "Avancer de 10 secondes", onClick = { vm.player.seekBy(10_000L) })
                         // Same availability rule as the web's TrackMenu button:
                         // an actual audio choice, or at least one subtitle.
                         val dec = decision
                         if (dec != null && (dec.audioTracks.size > 1 || dec.subtitles.isNotEmpty())) {
-                            TvCtrlButton("💬", onClick = { showTracks = true; interactions++ })
+                            TvCtrlButton(Icons.Filled.Subtitles, "Pistes audio et sous-titres", onClick = { showTracks = true; interactions++ })
                         }
                     }
                 }
@@ -515,9 +525,11 @@ private fun formatTime(ms: Long): String {
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }
 
-/** Round transport control. `big` = the central play/pause. */
+/** Round transport control. `big` = the central play/pause. Vector icons, not
+ *  emoji glyphs — the system emoji font paints those in colour (orange pause
+ *  buttons…), which wrecks the theme on every OEM. */
 @Composable
-private fun TvCtrlButton(glyph: String, onClick: () -> Unit, modifier: Modifier = Modifier, big: Boolean = false) {
+private fun TvCtrlButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, modifier: Modifier = Modifier, big: Boolean = false) {
     val colors = LocalFlixTvColors.current
     val d = if (big) 68.dp else 52.dp
     Surface(
@@ -531,7 +543,7 @@ private fun TvCtrlButton(glyph: String, onClick: () -> Unit, modifier: Modifier 
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.12f),
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(glyph, color = Color.White, fontSize = if (big) 26.sp else 20.sp, fontWeight = FontWeight.Bold)
+            Icon(icon, contentDescription = contentDescription, tint = Color.White, modifier = Modifier.size(if (big) 32.dp else 24.dp))
         }
     }
 }

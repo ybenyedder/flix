@@ -522,11 +522,14 @@ internal fun TvTile(
                 }
             }
             if (isNew(item) && progress == null) {
+                // Pill badge (parity with the web's « Nouveau ») — the old
+                // 3dp-corner rectangle read as a harsh sticker on every tile.
                 Box(
-                    Modifier.align(Alignment.TopStart).padding(6.dp).clip(RoundedCornerShape(3.dp)).background(colors.accent)
-                        .padding(horizontal = 5.dp, vertical = 2.dp),
+                    Modifier.align(Alignment.TopStart).padding(6.dp).clip(RoundedCornerShape(50))
+                        .background(Brush.horizontalGradient(listOf(colors.accent, Color(0xFFFF4D55))))
+                        .padding(horizontal = 7.dp, vertical = 2.dp),
                 ) {
-                    Text("NOUVEAU", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                    Text("Nouveau", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                 }
             }
             Text(

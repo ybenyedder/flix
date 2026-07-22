@@ -18,13 +18,17 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -113,6 +117,16 @@ fun TvOnboardingScreen(connecting: Boolean, message: String?, initial: String, o
 @Composable
 fun TvProfilesScreen(profiles: List<ProfileRef>, onSelect: (String) -> Unit, onChangeServer: (() -> Unit)? = null) {
     val colors = LocalFlixTvColors.current
+    // Initial focus on the first profile: without it the screen boots with NO
+    // focused element, so the first CENTER press lands nowhere and the app
+    // reads as frozen — the single worst first impression a TV app can make.
+    val firstProfileFocus = remember { FocusRequester() }
+    LaunchedEffect(profiles.isNotEmpty()) {
+        if (profiles.isNotEmpty()) {
+            withFrameNanos { }
+            runCatching { firstProfileFocus.requestFocus() }
+        }
+    }
     Column(Modifier.fillMaxSize().padding(64.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text("Qui regarde ?", color = colors.text, fontSize = 32.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
         Spacer(Modifier.height(36.dp))
@@ -123,9 +137,15 @@ fun TvProfilesScreen(profiles: List<ProfileRef>, onSelect: (String) -> Unit, onC
             Text("Aucun profil trouvé sur ce serveur.", color = colors.textMuted, fontSize = 16.sp)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-            profiles.forEach { p ->
+            profiles.forEachIndexed { index, p ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    TvAvatar(p.avatar, p.username, 120, onClick = { onSelect(p.username) })
+                    TvAvatar(
+                        p.avatar,
+                        p.username,
+                        120,
+                        onClick = { onSelect(p.username) },
+                        modifier = if (index == 0) Modifier.focusRequester(firstProfileFocus) else Modifier,
+                    )
                     Spacer(Modifier.height(10.dp))
                     Text(p.username, color = colors.textMuted, fontSize = 16.sp)
                 }
