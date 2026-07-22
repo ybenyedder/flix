@@ -106,7 +106,11 @@ function metaParts(item: CatalogEntry): string {
 // from md up — in the home CAROUSELS the hover overlay already carries the title,
 // so on desktop the rows become a clean wall of artwork (Netflix-style) while
 // touch users, who get no hover, keep the caption.
-function CardBase({ item, caption = "always" }: { item: CatalogEntry; caption?: "always" | "mobile" }) {
+// `allowNew`: lets the caller suppress the "Nouveau" badge when newness carries
+// no signal — e.g. right after a first library import, when 100% of the catalog
+// is "new" at once and a badge on every tile is pure noise that undoes the
+// caption-less "wall of artwork". Default true (a lone new title still flags).
+function CardBase({ item, caption = "always", allowNew = true }: { item: CatalogEntry; caption?: "always" | "mobile"; allowNew?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const hoverTimer = useRef<number | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -128,7 +132,7 @@ function CardBase({ item, caption = "always" }: { item: CatalogEntry; caption?: 
   const seen = useStateStore((s) => s.seenTopKeys.has(`${item.type}:${item.id}`));
   const watched = useStateStore((s) => s.isWatched(item.type, item.id, item.type === "show" ? item.episodeCount : undefined));
   const match = useRecoStore((s) => s.matchFor(item.type, item.id));
-  const showNewBadge = isNew(item.addedAt) && !seen;
+  const showNewBadge = allowNew && isNew(item.addedAt) && !seen;
 
   const clearTimer = () => {
     if (hoverTimer.current !== null) {

@@ -16,6 +16,7 @@ import { useProfileStore } from "@/store/profile";
 import { useArrStore } from "@/store/arr";
 import { useUiStore } from "@/store/ui";
 import { sortByAddedDesc, buildGenreRows, type CatalogItem } from "@/lib/flix/rows";
+import { isNew } from "@/lib/flix/format";
 import type { RecoRow } from "@/lib/flix/types";
 import { BillboardHero } from "./BillboardHero";
 import { Row } from "./Row";
@@ -123,6 +124,15 @@ export function HomeView() {
 
   const recentlyAdded = useMemo(() => sortByAddedDesc(all).slice(0, RECENT_ROW_SIZE), [all]);
 
+  // "Nouveau" carries no signal when most of the library is new at once (the
+  // first-import state), where a pill on every tile is pure noise that undoes
+  // the caption-less wall of artwork. Suppress it on the home rows until new
+  // titles are a minority (≤ 1/3 of the catalogue); a lone new title still flags.
+  const homeAllowNew = useMemo(() => {
+    if (all.length === 0) return true;
+    return all.filter((i) => isNew(i.addedAt)).length <= all.length / 3;
+  }, [all]);
+
   const top10MoviesRow = recoRows.find((r) => r.id === "top10-movies");
   const top10ShowsRow = recoRows.find((r) => r.id === "top10-shows");
   const forYouRow = recoRows.find((r) => r.id === "for-you");
@@ -224,7 +234,7 @@ export function HomeView() {
             renderItem={(entry) => <ContinueWatchingCard entry={entry} />}
           />
         )}
-        {myListItems.length > 0 && <Row title="Ma liste" items={myListItems} keyFor={keyOf} renderItem={(item) => <Card item={item} caption="mobile" />} />}
+        {myListItems.length > 0 && <Row title="Ma liste" items={myListItems} keyFor={keyOf} renderItem={(item) => <Card item={item} caption="mobile" allowNew={homeAllowNew} />} />}
 
         {top10Movies.length >= TOP10_MIN && (
           <Row
@@ -246,27 +256,27 @@ export function HomeView() {
         )}
 
         {forYouRow && itemsFor(forYouRow).length > 0 && (
-          <Row title={forYouRow.title} items={itemsFor(forYouRow)} keyFor={keyOf} renderItem={(item) => <Card item={item} caption="mobile" />} />
+          <Row title={forYouRow.title} items={itemsFor(forYouRow)} keyFor={keyOf} renderItem={(item) => <Card item={item} caption="mobile" allowNew={homeAllowNew} />} />
         )}
 
         {becauseRows.map((row) => {
           const items = itemsFor(row);
-          return items.length > 0 && <Row key={row.id} title={row.title} items={items} keyFor={keyOf} renderItem={(item) => <Card item={item} caption="mobile" />} />;
+          return items.length > 0 && <Row key={row.id} title={row.title} items={items} keyFor={keyOf} renderItem={(item) => <Card item={item} caption="mobile" allowNew={homeAllowNew} />} />;
         })}
 
         {engineGenreRows.map((row) => {
           const items = itemsFor(row);
-          return items.length > 0 && <Row key={row.id} title={row.title} items={items} keyFor={keyOf} renderItem={(item) => <Card item={item} caption="mobile" />} />;
+          return items.length > 0 && <Row key={row.id} title={row.title} items={items} keyFor={keyOf} renderItem={(item) => <Card item={item} caption="mobile" allowNew={homeAllowNew} />} />;
         })}
         {fallbackGenreRows.map(
           (row) =>
-            row.items.length > 0 && <Row key={row.genre} title={row.genre} items={row.items} keyFor={keyOf} renderItem={(item) => <Card item={item} caption="mobile" />} />,
+            row.items.length > 0 && <Row key={row.genre} title={row.genre} items={row.items} keyFor={keyOf} renderItem={(item) => <Card item={item} caption="mobile" allowNew={homeAllowNew} />} />,
         )}
 
-        {recentlyAdded.length > 0 && <Row title="Ajoutés récemment" items={recentlyAdded} keyFor={keyOf} renderItem={(item) => <Card item={item} caption="mobile" />} />}
+        {recentlyAdded.length > 0 && <Row title="Ajoutés récemment" items={recentlyAdded} keyFor={keyOf} renderItem={(item) => <Card item={item} caption="mobile" allowNew={homeAllowNew} />} />}
 
         {discoverRow && itemsFor(discoverRow).length > 0 && (
-          <Row title={discoverRow.title} items={itemsFor(discoverRow)} keyFor={keyOf} renderItem={(item) => <Card item={item} caption="mobile" />} />
+          <Row title={discoverRow.title} items={itemsFor(discoverRow)} keyFor={keyOf} renderItem={(item) => <Card item={item} caption="mobile" allowNew={homeAllowNew} />} />
         )}
       </div>
     </div>
