@@ -347,14 +347,14 @@ function CardOverlay({ item, rect, inMyList, rating, watched, match, onMouseEnte
       </div>
       <div className="space-y-2 p-3">
         <div className="flex items-center gap-2">
-          <button type="button" onClick={onPlay} aria-label="Lecture" className="grid size-8 place-items-center rounded-full bg-white text-black transition-colors hover:bg-white/80">
+          <button type="button" onClick={onPlay} aria-label="Lecture" className="icon-btn size-8 bg-white text-black hover:bg-white/80">
             <Play className="size-4 fill-black" />
           </button>
           <button
             type="button"
             onClick={onToggleList}
             aria-label={inMyList ? "Retirer de ma liste" : "Ajouter à ma liste"}
-            className="grid size-8 place-items-center rounded-full border border-white/25 bg-white/5 backdrop-blur-sm text-white transition-colors hover:bg-white/15 hover:border-white/60"
+            className="icon-btn size-8 border border-white/25 bg-white/5 text-white hover:bg-white/15 hover:border-white/60"
           >
             {inMyList ? <Check className="size-4" /> : <Plus className="size-4" />}
           </button>
@@ -362,7 +362,7 @@ function CardOverlay({ item, rect, inMyList, rating, watched, match, onMouseEnte
             type="button"
             onClick={() => onRate(1)}
             aria-label="J’aime"
-            className={"grid size-8 place-items-center rounded-full border text-white backdrop-blur-sm transition-colors " + (rating >= 1 ? "border-white bg-white/10" : "border-white/25 bg-white/5 hover:bg-white/15 hover:border-white/60")}
+            className={"icon-btn size-8 border text-white " + (rating >= 1 ? "border-white bg-white/10" : "border-white/25 bg-white/5 hover:bg-white/15 hover:border-white/60")}
           >
             <ThumbsUp className="size-4" />
           </button>
@@ -370,7 +370,7 @@ function CardOverlay({ item, rect, inMyList, rating, watched, match, onMouseEnte
             type="button"
             onClick={() => onRate(-1)}
             aria-label="Je n’aime pas"
-            className={"grid size-8 place-items-center rounded-full border text-white backdrop-blur-sm transition-colors " + (rating === -1 ? "border-white bg-white/10" : "border-white/25 bg-white/5 hover:bg-white/15 hover:border-white/60")}
+            className={"icon-btn size-8 border text-white " + (rating === -1 ? "border-white bg-white/10" : "border-white/25 bg-white/5 hover:bg-white/15 hover:border-white/60")}
           >
             <ThumbsDown className="size-4" />
           </button>
@@ -380,7 +380,7 @@ function CardOverlay({ item, rect, inMyList, rating, watched, match, onMouseEnte
             aria-label={watched ? "Marquer comme non vu" : "Marquer comme vu"}
             title={watched ? "Marquer comme non vu" : "Marquer comme vu"}
             className={
-              "grid size-8 place-items-center rounded-full border backdrop-blur-sm transition-colors " +
+              "icon-btn size-8 border " +
               (watched ? "border-white bg-white/10 text-green-500" : "border-white/25 bg-white/5 text-white hover:bg-white/15 hover:border-white/60")
             }
           >
@@ -390,7 +390,7 @@ function CardOverlay({ item, rect, inMyList, rating, watched, match, onMouseEnte
             type="button"
             onClick={onOpenDetail}
             aria-label="Plus d’infos"
-            className="ml-auto grid size-8 place-items-center rounded-full border border-white/25 bg-white/5 backdrop-blur-sm text-white transition-colors hover:bg-white/15 hover:border-white/60"
+            className="icon-btn ml-auto size-8 border border-white/25 bg-white/5 text-white hover:bg-white/15 hover:border-white/60"
           >
             <ChevronDown className="size-4" />
           </button>

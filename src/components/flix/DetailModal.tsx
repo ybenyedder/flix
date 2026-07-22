@@ -231,7 +231,7 @@ function DetailModalContent({ target }: { target: DetailTarget }) {
                       notify(inMyList ? "Retiré de Ma liste" : "Ajouté à Ma liste");
                     }}
                     aria-label={inMyList ? "Retirer de ma liste" : "Ajouter à ma liste"}
-                    className="grid size-10 place-items-center rounded-full border border-white/25 bg-white/5 text-white backdrop-blur-sm transition-colors hover:border-white/60 hover:bg-white/15"
+                    className="icon-btn size-10 border border-white/25 bg-white/5 text-white hover:border-white/60 hover:bg-white/15"
                   >
                     {inMyList ? <Check className="size-5" /> : <Plus className="size-5" />}
                   </button>
@@ -244,7 +244,7 @@ function DetailModalContent({ target }: { target: DetailTarget }) {
                     aria-label={watched ? "Marquer comme non vu" : "Marquer comme vu"}
                     title={watched ? "Marquer comme non vu" : "Marquer comme vu"}
                     className={
-                      "grid size-10 place-items-center rounded-full border backdrop-blur-sm transition-colors " +
+                      "icon-btn size-10 border " +
                       (watched ? "border-white/60 bg-white/15 text-green-500" : "border-white/25 bg-white/5 text-white hover:border-white/60 hover:bg-white/15")
                     }
                   >
@@ -254,7 +254,7 @@ function DetailModalContent({ target }: { target: DetailTarget }) {
                     type="button"
                     onClick={() => void setRating(target.type, target.id, 1)}
                     aria-label="J’aime"
-                    className={"grid size-10 place-items-center rounded-full border text-white backdrop-blur-sm transition-colors " + (rating >= 1 ? "border-white/60 bg-white/15" : "border-white/25 bg-white/5 hover:border-white/60 hover:bg-white/15")}
+                    className={"icon-btn size-10 border text-white " + (rating >= 1 ? "border-white/60 bg-white/15" : "border-white/25 bg-white/5 hover:border-white/60 hover:bg-white/15")}
                   >
                     <ThumbsUp className="size-5" />
                   </button>
@@ -262,7 +262,7 @@ function DetailModalContent({ target }: { target: DetailTarget }) {
                     type="button"
                     onClick={() => void setRating(target.type, target.id, -1)}
                     aria-label="Je n’aime pas"
-                    className={"grid size-10 place-items-center rounded-full border text-white backdrop-blur-sm transition-colors " + (rating === -1 ? "border-white/60 bg-white/15" : "border-white/25 bg-white/5 hover:border-white/60 hover:bg-white/15")}
+                    className={"icon-btn size-10 border text-white " + (rating === -1 ? "border-white/60 bg-white/15" : "border-white/25 bg-white/5 hover:border-white/60 hover:bg-white/15")}
                   >
                     <ThumbsDown className="size-5" />
                   </button>

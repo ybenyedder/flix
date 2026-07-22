@@ -80,6 +80,29 @@
   border: 1px solid var(--glass-border);
 }
 
+/* Circular icon button — the round action controls repeated across the Card
+ * hover overlay and the DetailModal header (play/list/rate/watched/more). This
+ * factors out the shared structure and gives every one the same tactile press
+ * (scale-down on :active) and a single transition list, while per-button colour
+ * and state classes (border, bg, text) stay inline so toggles switch cleanly.
+ * Size lives on the element (size-8 / size-10). */
+@utility icon-btn {
+  display: grid;
+  place-items: center;
+  border-radius: 9999px;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  transition:
+    transform 0.16s var(--ease-out-quart),
+    background-color 0.18s var(--ease-out-quart),
+    border-color 0.18s var(--ease-out-quart),
+    color 0.18s var(--ease-out-quart),
+    box-shadow 0.18s var(--ease-out-quart);
+  &:active {
+    transform: scale(0.9);
+  }
+}
+
 /* Full-page ambient: the app is a dark room that stays lit as you scroll — a
  * cool light source high on the screen and a soft vignette on the floor, both
  * fixed to the viewport so the "room light" never scrolls away. The solid base
@@ -130,8 +153,13 @@ button {
   font-family: inherit;
 }
 
+/* Keyboard/remote focus ring. White (not accent red): it clears 3:1 contrast on
+ * every surface in this dark UI — including the red accent buttons, the red
+ * "Nouveau" badge and the avatar, where a red ring would vanish. Modern browsers
+ * make `outline` follow border-radius, so rounded controls get a rounded ring;
+ * the offset lifts it off the element for a crisp premium read. */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid rgb(255 255 255 / 0.92);
   outline-offset: 2px;
 }
 
