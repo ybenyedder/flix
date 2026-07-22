@@ -5,7 +5,8 @@
 // src/lib/flix/rows.ts (applyBrowseFilters / sortBrowseItems), tested in
 // test/rows.test.ts — this component is just useState + markup.
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import { useCatalog } from "@/lib/flix/useCatalog";
 import { useStateStore } from "@/store/state";
 import {
@@ -36,7 +37,22 @@ function chipClass(selected: boolean): string {
   );
 }
 
-const selectClass = "rounded-field bg-white/5 px-2 py-1 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-accent/60";
+// Sort/decade dropdowns share the chips' pill shape: appearance-none removes the
+// OS arrow so the app's own chevron (from PillSelect) sits inside a pill with the
+// same height/radius/border as the filter chips — one control language, not two.
+const selectClass =
+  "appearance-none rounded-full border border-white/25 bg-white/5 py-1 pl-3 pr-8 text-sm text-white outline-none transition-colors hover:border-white/60 focus-visible:border-white/60";
+
+function PillSelect({ value, onChange, ariaLabel, children }: { value: string | number; onChange: (v: string) => void; ariaLabel?: string; children: ReactNode }) {
+  return (
+    <div className="relative inline-flex items-center">
+      <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={ariaLabel} className={selectClass}>
+        {children}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-2.5 size-4 text-muted" />
+    </div>
+  );
+}
 
 export function BrowseView({ kind }: { kind: "movie" | "show" }) {
   // Keyed on kind so switching Films <-> Séries resets filters and sort —
@@ -72,7 +88,12 @@ function BrowseInner({ kind }: { kind: "movie" | "show" }) {
 
   return (
     <div className="min-h-screen px-4 pb-20 pt-24 md:px-12">
-      <h1 className="mb-5 font-display text-3xl font-bold tracking-tight text-white">{kind === "movie" ? "Films" : "Séries"}</h1>
+      <div className="mb-5 flex items-baseline gap-3">
+        <h1 className="font-display text-3xl font-bold tracking-tight text-white">{kind === "movie" ? "Films" : "Séries"}</h1>
+        <span className="text-sm text-muted">
+          {items.length} titre{items.length > 1 ? "s" : ""}
+        </span>
+      </div>
 
       {genres.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-2">
@@ -87,24 +108,23 @@ function BrowseInner({ kind }: { kind: "movie" | "show" }) {
         </div>
       )}
 
-      <div className="mb-6 flex flex-wrap items-center gap-x-3 gap-y-2">
+      <div className="mb-6 flex flex-wrap items-center gap-x-2.5 gap-y-2">
         <label className="flex items-center gap-2 text-sm text-muted">
           Trier&nbsp;:
-          <select value={sort} onChange={(e) => setSort(e.target.value as BrowseSort)} className={selectClass}>
+          <PillSelect value={sort} onChange={(v) => setSort(v as BrowseSort)} ariaLabel="Trier">
             {sortOptions.map((option) => (
               <option key={option.id} value={option.id}>
                 {option.label}
               </option>
             ))}
-          </select>
+          </PillSelect>
         </label>
 
         {decades.length > 0 && (
-          <select
+          <PillSelect
             value={filters.decade ?? ""}
-            onChange={(e) => setFilters((f) => ({ ...f, decade: e.target.value === "" ? null : Number(e.target.value) }))}
-            aria-label="Filtrer par décennie"
-            className={selectClass}
+            onChange={(v) => setFilters((f) => ({ ...f, decade: v === "" ? null : Number(v) }))}
+            ariaLabel="Filtrer par décennie"
           >
             <option value="">Toutes les années</option>
             {decades.map((decade) => (
@@ -112,8 +132,11 @@ function BrowseInner({ kind }: { kind: "movie" | "show" }) {
                 Années {decade}
               </option>
             ))}
-          </select>
+          </PillSelect>
         )}
+
+        {/* Separates the "sort" cluster (dropdowns) from the on/off filter chips. */}
+        <span aria-hidden className="mx-1 hidden h-5 w-px bg-white/10 sm:block" />
 
         <button
           type="button"
@@ -131,11 +154,8 @@ function BrowseInner({ kind }: { kind: "movie" | "show" }) {
           HDR
         </button>
 
-        <span className="ml-auto text-sm text-muted">
-          {items.length} titre{items.length > 1 ? "s" : ""}
-        </span>
         {dirty && (
-          <button type="button" onClick={reset} className="text-sm text-muted underline underline-offset-2 transition-colors hover:text-white">
+          <button type="button" onClick={reset} className="ml-auto text-sm text-muted underline underline-offset-2 transition-colors hover:text-white">
             Réinitialiser
           </button>
         )}
