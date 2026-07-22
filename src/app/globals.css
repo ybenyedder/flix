@@ -28,10 +28,13 @@
   --radius-panel: 1.125rem; /* menus, popovers, settings sections, stat cards */
   --radius-dialog: 1.5rem; /* DetailModal, request/version modals, upload dock */
 
-  /* elevation — content that sits gets -card/-lift, content that floats gets -pop */
-  --shadow-card: 0 2px 10px rgb(0 0 0 / 0.4);
-  --shadow-lift: 0 12px 34px -6px rgb(0 0 0 / 0.6);
-  --shadow-pop: 0 24px 70px -12px rgb(0 0 0 / 0.8);
+  /* elevation — content that sits gets -card/-lift, content that floats gets -pop.
+   * Two-layer shadows (a tight contact shadow + a soft ambient one) read as real
+   * light in a dark room instead of a single flat drop — the difference between
+   * a sticker and an object that casts. */
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.35), 0 4px 14px -3px rgb(0 0 0 / 0.5);
+  --shadow-lift: 0 6px 16px -4px rgb(0 0 0 / 0.5), 0 20px 46px -10px rgb(0 0 0 / 0.72);
+  --shadow-pop: 0 10px 30px -8px rgb(0 0 0 / 0.55), 0 40px 90px -20px rgb(0 0 0 / 0.88);
   /* The one red accent glow — reserved for the billboard "Lecture" hover and an
    * active scan/upload progress bar. Deliberately not used anywhere else. */
   --shadow-glow: 0 0 24px rgb(229 9 20 / 0.35);
@@ -67,10 +70,28 @@
  * one consistent recipe for glass / raised cards / soft dividers. */
 
 @utility glass {
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
-  backdrop-filter: blur(20px) saturate(140%);
+  /* A faint top-down sheen composited over the frosted base gives the panel a
+   * lit edge — real frosted glass catches light at the top. Layered in the
+   * background (not box-shadow) so it never clobbers a -pop/-lift shadow on
+   * elements that carry both. */
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 42%), var(--glass-bg);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  backdrop-filter: blur(22px) saturate(150%);
   border: 1px solid var(--glass-border);
+}
+
+/* Full-page ambient: the app is a dark room that stays lit as you scroll — a
+ * cool light source high on the screen and a soft vignette on the floor, both
+ * fixed to the viewport so the "room light" never scrolls away. The solid base
+ * colour is kept so hero/detail fades that resolve to var(--background) never
+ * seam against it; the gradients only tint the flat regions the artwork leaves
+ * behind. */
+@utility app-shell {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(115% 78% at 50% -6%, rgb(40 35 68 / 0.6) 0%, rgb(21 20 36 / 0.24) 26%, transparent 52%),
+    radial-gradient(90% 60% at 50% 108%, rgb(0 0 0 / 0.55) 0%, transparent 60%);
+  background-attachment: fixed;
 }
 
 @utility card-surface {

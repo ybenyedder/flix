@@ -67,7 +67,7 @@ function FlixShell() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-shell min-h-screen">
       <HistoryManager />
       <Header />
       <MobileNav />
