@@ -877,8 +877,9 @@ function PlayerSession({ initial }: { initial: PlaybackRequest }) {
       </video>
 
       {!current && !error && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <p className="text-lg font-medium text-white">{initial.title ? `Chargement de « ${initial.title} »…` : "Chargement…"}</p>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-4" role="status">
+          <div className="size-14 animate-spin rounded-full border-4 border-white/20 border-t-accent" />
+          <p className="text-base font-medium text-white/85">{initial.title ? `Chargement de « ${initial.title} »…` : "Chargement…"}</p>
         </div>
       )}
 

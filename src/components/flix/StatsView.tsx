@@ -4,7 +4,8 @@
 // figures, top genres as plain CSS bars (no chart library), recent history.
 // Available to every profile; the server scopes everything to the session user.
 
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { CalendarDays, CalendarRange, Clock, CircleCheck, Check } from "lucide-react";
 import { api, ApiError } from "@/lib/flix/api";
 import { formatDuration } from "@/lib/flix/format";
 
@@ -42,11 +43,14 @@ function formatEventDate(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
     <div className="card-surface p-5">
-      <p className="text-xs text-muted">{label}</p>
-      <p className="mt-1 font-display text-3xl font-semibold tabular-nums text-white">{value}</p>
+      <div className="flex items-center gap-1.5 text-muted">
+        <span className="text-white/45">{icon}</span>
+        <p className="text-xs">{label}</p>
+      </div>
+      <p className="mt-1.5 font-display text-3xl font-semibold tabular-nums text-white">{value}</p>
     </div>
   );
 }
@@ -70,15 +74,24 @@ export function StatsView() {
         <h1 className="mb-6 font-display text-3xl font-bold tracking-tight text-white">Mon activité</h1>
 
         {error && <p className="text-sm text-accent">{error}</p>}
-        {!stats && !error && <p className="text-sm text-muted">Chargement…</p>}
+        {!stats && !error && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-hidden>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="card-surface p-5">
+                <div className="h-3 w-2/3 rounded-card shimmer" />
+                <div className="mt-2.5 h-7 w-1/2 rounded-card shimmer" />
+              </div>
+            ))}
+          </div>
+        )}
 
         {stats && (
           <>
             <div className="stagger-children grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatCard label="7 derniers jours" value={formatWatchTime(stats.seconds7d)} />
-              <StatCard label="30 derniers jours" value={formatWatchTime(stats.seconds30d)} />
-              <StatCard label="Temps total" value={formatWatchTime(stats.secondsTotal)} />
-              <StatCard label="Titres terminés" value={String(stats.completedTitles)} />
+              <StatCard icon={<CalendarDays className="size-3.5" />} label="7 derniers jours" value={formatWatchTime(stats.seconds7d)} />
+              <StatCard icon={<CalendarRange className="size-3.5" />} label="30 derniers jours" value={formatWatchTime(stats.seconds30d)} />
+              <StatCard icon={<Clock className="size-3.5" />} label="Temps total" value={formatWatchTime(stats.secondsTotal)} />
+              <StatCard icon={<CircleCheck className="size-3.5" />} label="Titres terminés" value={String(stats.completedTitles)} />
             </div>
 
             <section className="mt-10">
@@ -122,7 +135,8 @@ export function StatsView() {
                         </p>
                         <p className="text-xs text-muted">{formatEventDate(entry.createdAt)}</p>
                       </div>
-                      <span className={"shrink-0 text-xs " + (entry.kind === "complete" ? "text-white" : "text-muted")}>
+                      <span className={"flex shrink-0 items-center gap-1.5 text-xs " + (entry.kind === "complete" ? "text-white" : "text-muted")}>
+                        {entry.kind === "complete" && <Check className="size-3.5 text-match" />}
                         {entry.kind === "complete" ? "Terminé" : "Abandonné"}
                       </span>
                     </li>
