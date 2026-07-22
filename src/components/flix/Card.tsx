@@ -9,7 +9,7 @@
 import { memo, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
-import { Play, Plus, Check, ThumbsUp, ThumbsDown, ChevronDown } from "lucide-react";
+import { Play, Plus, Check, Eye, ThumbsUp, ThumbsDown, ChevronDown } from "lucide-react";
 import { api } from "@/lib/flix/api";
 import type { CatalogEntry, MovieDetail, ShowDetail, TrickplayMeta } from "@/lib/flix/types";
 import { qualityLabel } from "@/lib/flix/quality";
@@ -394,7 +394,7 @@ function CardOverlay({ item, rect, inMyList, rating, watched, match, onMouseEnte
               (watched ? "border-white bg-white/10 text-match" : "border-white/25 bg-white/5 text-white hover:bg-white/15 hover:border-white/60")
             }
           >
-            <Check className="size-4" />
+            <Eye className="size-4" />
           </button>
           <button
             type="button"

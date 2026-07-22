@@ -15,7 +15,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { X, Play, Plus, Check, ThumbsUp, ThumbsDown } from "lucide-react";
+import { X, Play, Plus, Check, Eye, ThumbsUp, ThumbsDown } from "lucide-react";
 import { api } from "@/lib/flix/api";
 import type { MovieDetail, ShowDetail } from "@/lib/flix/types";
 import { qualityLabel, versionLabel } from "@/lib/flix/quality";
@@ -248,7 +248,7 @@ function DetailModalContent({ target }: { target: DetailTarget }) {
                       (watched ? "border-white/60 bg-white/15 text-match" : "border-white/25 bg-white/5 text-white hover:border-white/60 hover:bg-white/15")
                     }
                   >
-                    <Check className="size-5" />
+                    <Eye className="size-5" />
                   </button>
                   <button
                     type="button"

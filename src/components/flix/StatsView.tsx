@@ -117,7 +117,7 @@ export function StatsView() {
                       </div>
                       <div className="h-2 overflow-hidden rounded-full bg-white/5">
                         <div
-                          className="h-full rounded-full bg-gradient-to-r from-accent to-accent-hover"
+                          className="h-full rounded-full bg-gradient-to-r from-white/40 to-white/15"
                           style={{ width: `${maxGenreSeconds > 0 ? Math.max(2, Math.round((g.seconds / maxGenreSeconds) * 100)) : 0}%` }}
                         />
                       </div>

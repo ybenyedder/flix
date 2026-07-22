@@ -7,7 +7,7 @@
 // focus, as the marquer vu / non vu toggle.
 
 import Image from "next/image";
-import { Check, Play } from "lucide-react";
+import { Eye, Play } from "lucide-react";
 import { api } from "@/lib/flix/api";
 import type { EpisodeDetail } from "@/lib/flix/types";
 import { formatDuration } from "@/lib/flix/format";
@@ -64,7 +64,7 @@ export function EpisodeRow({ episode, showId, showTitle }: { episode: EpisodeDet
                   : "border-white/40 text-white opacity-0 hover:border-white focus-visible:opacity-100 group-hover/episode:opacity-100")
               }
             >
-              <Check className="size-3.5" />
+              <Eye className="size-3.5" />
             </button>
             <span className="text-xs text-muted">{formatDuration(episode.duration)}</span>
           </span>
