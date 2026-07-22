@@ -245,7 +245,7 @@ function DetailModalContent({ target }: { target: DetailTarget }) {
                     title={watched ? "Marquer comme non vu" : "Marquer comme vu"}
                     className={
                       "icon-btn size-10 border " +
-                      (watched ? "border-white/60 bg-white/15 text-green-500" : "border-white/25 bg-white/5 text-white hover:border-white/60 hover:bg-white/15")
+                      (watched ? "border-white/60 bg-white/15 text-match" : "border-white/25 bg-white/5 text-white hover:border-white/60 hover:bg-white/15")
                     }
                   >
                     <Check className="size-5" />

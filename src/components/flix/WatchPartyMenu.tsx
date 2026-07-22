@@ -141,8 +141,8 @@ export function WatchPartyMenu() {
             <>
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-sm font-semibold text-white">{isHost ? "Votre séance" : "Séance"}</span>
-                <span className={"flex items-center gap-1 text-[10px] " + (connected ? "text-green-400" : "text-muted")}>
-                  <span className={"size-1.5 rounded-full " + (connected ? "bg-green-400" : connecting ? "bg-yellow-400" : "bg-muted")} />
+                <span className={"flex items-center gap-1 text-[10px] " + (connected ? "text-match" : "text-muted")}>
+                  <span className={"size-1.5 rounded-full " + (connected ? "bg-match" : connecting ? "bg-yellow-400" : "bg-muted")} />
                   {connected ? "connecté" : connecting ? "connexion…" : "hors ligne"}
                 </span>
               </div>
@@ -154,7 +154,7 @@ export function WatchPartyMenu() {
                 title="Copier le code"
               >
                 <span className="text-2xl font-black tracking-[0.3em] text-white">{code}</span>
-                {copied ? <Check className="size-4 text-green-400" /> : <Copy className="size-4 text-muted" />}
+                {copied ? <Check className="size-4 text-match" /> : <Copy className="size-4 text-muted" />}
               </button>
 
               <p className="mb-2 text-xs text-muted">

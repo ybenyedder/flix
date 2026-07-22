@@ -59,9 +59,10 @@
   --accent: #e50914;
   --accent-hover: #f6121d;
   --muted: #a8a8b8;
-  /* The "% de correspondance" green — the crisp emerald streaming apps use for
-   * a taste match (brighter/cooler than a generic green-500), reserved for that
-   * one signal so it always reads as "this is for you". */
+  /* The app's single positive/green signal — the crisp emerald streaming apps
+   * use for "% de correspondance", reused for every affirmative cue (vu/terminé,
+   * connecté, copié, upload réussi) so there is ONE green, not a scatter of
+   * green-400/500. In-progress stays amber. */
   --match: #46d369;
 
   /* Frosted-glass surface for anything that floats over content (header when

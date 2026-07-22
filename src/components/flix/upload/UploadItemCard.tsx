@@ -134,7 +134,7 @@ export function UploadItemCard({ item }: { item: UploadItem }) {
 
       {item.status === "done" && (
         <div className="mt-2 flex items-center justify-between gap-2">
-          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-400">
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-match">
             <Check className="size-4" /> Ajouté à la bibliothèque
           </span>
           {link && (

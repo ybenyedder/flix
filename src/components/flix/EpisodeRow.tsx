@@ -60,7 +60,7 @@ export function EpisodeRow({ episode, showId, showTitle }: { episode: EpisodeDet
               className={
                 "grid size-6 place-items-center rounded-full border transition-all " +
                 (watched
-                  ? "border-white/60 bg-white/10 text-green-500 hover:border-white"
+                  ? "border-white/60 bg-white/10 text-match hover:border-white"
                   : "border-white/40 text-white opacity-0 hover:border-white focus-visible:opacity-100 group-hover/episode:opacity-100")
               }
             >

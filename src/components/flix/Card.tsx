@@ -381,7 +381,7 @@ function CardOverlay({ item, rect, inMyList, rating, watched, match, onMouseEnte
             title={watched ? "Marquer comme non vu" : "Marquer comme vu"}
             className={
               "icon-btn size-8 border " +
-              (watched ? "border-white bg-white/10 text-green-500" : "border-white/25 bg-white/5 text-white hover:bg-white/15 hover:border-white/60")
+              (watched ? "border-white bg-white/10 text-match" : "border-white/25 bg-white/5 text-white hover:bg-white/15 hover:border-white/60")
             }
           >
             <Check className="size-4" />
