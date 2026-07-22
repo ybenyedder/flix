@@ -28,6 +28,11 @@ import { EmptyState } from "./EmptyState";
 const GENRE_ROWS = 3;
 const GENRE_ROW_SIZE = 20;
 const RECENT_ROW_SIZE = 20;
+// Below this, a lone (or near-lone) giant ranked numeral in a wide black void
+// reads as broken layout, not "a short list" — a real concern on a young
+// self-hosted library. Suppress the Top-10 section until there's a ranking
+// worth the oversized treatment; the titles still surface in the other rows.
+const TOP10_MIN = 4;
 
 function keyOf(item: CatalogItem): string {
   return `${item.type}-${item.id}`;
@@ -126,11 +131,20 @@ export function HomeView() {
   const engineGenreRows = recoRows.filter((r) => r.id.startsWith("genre-"));
   const discoverRow = recoRows.find((r) => r.id === "discover");
 
-  // Cold-start fallbacks: newest-added Top 10 and catalogue-wide genre
-  // frequency, exactly the Phase 5 heuristics, used only when the engine
-  // hasn't accumulated enough signal to produce its own version of that row.
-  const fallbackTop10Movies = useMemo(() => (top10MoviesRow ? [] : sortByAddedDesc(movies).slice(0, 10)), [top10MoviesRow, movies]);
-  const fallbackTop10Shows = useMemo(() => (top10ShowsRow ? [] : sortByAddedDesc(shows).slice(0, 10)), [top10ShowsRow, shows]);
+  // Newest-added stand-in for the Top-10 ranking, ALWAYS available: used when the
+  // engine has no ranking yet OR its ranking is too thin (< TOP10_MIN) for the
+  // oversized-numeral treatment — so the section never vanishes on a library that
+  // has plenty of titles but a low-signal profile. (Genre fallback stays below.)
+  const recentTop10Movies = useMemo(() => sortByAddedDesc(movies).slice(0, 10), [movies]);
+  const recentTop10Shows = useMemo(() => sortByAddedDesc(shows).slice(0, 10), [shows]);
+  const top10Movies = useMemo(() => {
+    const engine = top10MoviesRow ? (rowItems.get(top10MoviesRow.id) ?? []) : [];
+    return engine.length >= TOP10_MIN ? engine : recentTop10Movies;
+  }, [top10MoviesRow, rowItems, recentTop10Movies]);
+  const top10Shows = useMemo(() => {
+    const engine = top10ShowsRow ? (rowItems.get(top10ShowsRow.id) ?? []) : [];
+    return engine.length >= TOP10_MIN ? engine : recentTop10Shows;
+  }, [top10ShowsRow, rowItems, recentTop10Shows]);
   const fallbackGenreRows = useMemo(
     () => (engineGenreRows.length ? [] : buildGenreRows(all, GENRE_ROWS, GENRE_ROW_SIZE)),
     [engineGenreRows.length, all],
@@ -140,11 +154,10 @@ export function HomeView() {
   // the billboard's "N°X des films aujourd'hui" flag; 0/absent → no flag.
   const billboardRank = useMemo(() => {
     if (!billboard) return null;
-    const top10 =
-      billboard.type === "movie" ? (top10MoviesRow ? (rowItems.get(top10MoviesRow.id) ?? []) : fallbackTop10Movies) : top10ShowsRow ? (rowItems.get(top10ShowsRow.id) ?? []) : fallbackTop10Shows;
+    const top10 = billboard.type === "movie" ? top10Movies : top10Shows;
     const index = top10.findIndex((entry) => entry.type === billboard.type && entry.id === billboard.id);
     return index === -1 ? null : index + 1;
-  }, [billboard, top10MoviesRow, top10ShowsRow, rowItems, fallbackTop10Movies, fallbackTop10Shows]);
+  }, [billboard, top10Movies, top10Shows]);
 
   const myListItems = useMemo<CatalogItem[]>(() => {
     const wanted = new Set(myList.map((e) => `${e.itemType}-${e.itemId}`));
@@ -214,19 +227,19 @@ export function HomeView() {
         )}
         {myListItems.length > 0 && <Row title="Ma liste" items={myListItems} keyFor={keyOf} renderItem={(item) => <Card item={item} />} />}
 
-        {(top10MoviesRow ? itemsFor(top10MoviesRow) : fallbackTop10Movies).length > 0 && (
+        {top10Movies.length >= TOP10_MIN && (
           <Row
             title="Top 10 des films"
-            items={top10MoviesRow ? itemsFor(top10MoviesRow) : fallbackTop10Movies}
+            items={top10Movies}
             keyFor={keyOf}
             itemClassName="w-[50vw] sm:w-[32vw] md:w-[22vw] lg:w-[17vw]"
             renderItem={(item, index) => <Top10Card item={item} rank={index + 1} />}
           />
         )}
-        {(top10ShowsRow ? itemsFor(top10ShowsRow) : fallbackTop10Shows).length > 0 && (
+        {top10Shows.length >= TOP10_MIN && (
           <Row
             title="Top 10 des séries"
-            items={top10ShowsRow ? itemsFor(top10ShowsRow) : fallbackTop10Shows}
+            items={top10Shows}
             keyFor={keyOf}
             itemClassName="w-[50vw] sm:w-[32vw] md:w-[22vw] lg:w-[17vw]"
             renderItem={(item, index) => <Top10Card item={item} rank={index + 1} />}

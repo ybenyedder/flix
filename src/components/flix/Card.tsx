@@ -175,7 +175,10 @@ function CardBase({ item }: { item: CatalogEntry }) {
 
   const image = posterImage(item);
   const imageUrl = image ? api.imageUrl(image, 480) : null;
-  const label = qualityLabel(item.quality.height);
+  // Only surface NOTABLE quality on the tile (4K/HDR) — a plain "HD" badge on a
+  // mostly-HD library is pure noise over the artwork; HD/SD still show in the
+  // hover overlay and the detail modal.
+  const tileQuality = qualityLabel(item.quality.height) === "4K" ? "4K" : item.quality.hdr ? "HDR" : null;
   const meta = metaParts(item);
 
   return (
@@ -204,8 +207,10 @@ function CardBase({ item }: { item: CatalogEntry }) {
             {item.title}
           </div>
         )}
-        {showNewBadge && <span className="absolute left-1.5 top-1.5 rounded-full bg-gradient-to-r from-accent to-[#ff4d55] px-2 py-px text-[10px] font-bold text-white shadow">Nouveau</span>}
-        {label && <span className="absolute right-1.5 top-1.5 rounded-full glass px-2 py-px text-[10px] font-bold text-white">{label}</span>}
+        {/* "Nouveau" is a passive recency tag, so it must NOT wear the brand red
+         * that's reserved for action/identity — a quiet glass pill instead. */}
+        {showNewBadge && <span className="absolute left-1.5 top-1.5 rounded-full glass px-2 py-px text-[10px] font-semibold uppercase tracking-wide text-white/90">Nouveau</span>}
+        {tileQuality && <span className="absolute right-1.5 top-1.5 rounded-full glass px-2 py-px text-[10px] font-bold text-white">{tileQuality}</span>}
       </div>
       {/* Title + meta ALWAYS visible under the cover (not only on hover). */}
       <div className="mt-1.5 px-0.5">
