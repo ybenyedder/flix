@@ -18,7 +18,7 @@ import { Card } from "./Card";
 
 const BATCH = 42; // a few viewports of the densest (7-column) layout
 
-export function ProgressiveCardGrid({ items, gridClassName }: { items: CatalogEntry[]; gridClassName: string }) {
+export function ProgressiveCardGrid({ items, gridClassName, allowNew = true }: { items: CatalogEntry[]; gridClassName: string; allowNew?: boolean }) {
   const [count, setCount] = useState(BATCH);
   const sentinelRef = useRef<HTMLDivElement>(null);
   // Clamp instead of syncing state to props: a list that shrank below the
@@ -45,7 +45,7 @@ export function ProgressiveCardGrid({ items, gridClassName }: { items: CatalogEn
     <>
       <div className={gridClassName}>
         {items.slice(0, count).map((item) => (
-          <Card key={`${item.type}-${item.id}`} item={item} />
+          <Card key={`${item.type}-${item.id}`} item={item} allowNew={allowNew} />
         ))}
       </div>
       {hasMore && <div ref={sentinelRef} aria-hidden className="h-px" />}

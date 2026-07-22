@@ -24,3 +24,13 @@ export const NEW_BADGE_WINDOW_MS = 14 * 24 * 3600 * 1000;
 export function isNew(addedAt: number, now: number = Date.now()): boolean {
   return addedAt > 0 && now - addedAt < NEW_BADGE_WINDOW_MS;
 }
+
+/** Whether the « Nouveau » badge still carries signal for a catalogue: true only
+ *  when new items are a MINORITY (≤ 1/3). Right after a first import 100% of the
+ *  library is "new" at once, so a pill on every tile is pure noise — suppress it
+ *  then. Applied uniformly on Home AND the browse/search/list grids so the same
+ *  catalogue never shows the badge on one surface and hides it on another. */
+export function newBadgeMeaningful(items: { addedAt: number }[], now: number = Date.now()): boolean {
+  if (items.length === 0) return true;
+  return items.filter((i) => isNew(i.addedAt, now)).length <= items.length / 3;
+}

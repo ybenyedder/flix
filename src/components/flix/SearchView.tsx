@@ -16,6 +16,7 @@ import { useUiStore } from "@/store/ui";
 import { useRecoStore } from "@/store/reco";
 import { useCatalog } from "@/lib/flix/useCatalog";
 import { sortByAddedDesc, type CatalogItem } from "@/lib/flix/rows";
+import { newBadgeMeaningful } from "@/lib/flix/format";
 import { ProgressiveCardGrid } from "./ProgressiveCardGrid";
 import { DiscoverSection } from "./DiscoverSection";
 import { SkeletonGrid } from "./Skeletons";
@@ -72,13 +73,17 @@ export function SearchView() {
     return base.slice(0, 14);
   }, [trimmed, recoRows, movies, shows]);
 
+  // Same "Nouveau" suppression as Home: hide the badge when new titles aren't a
+  // minority of the library, so the grid never contradicts the home carousels.
+  const allowNew = useMemo(() => newBadgeMeaningful([...movies, ...shows]), [movies, shows]);
+
   return (
     <div className="min-h-screen px-4 pb-20 pt-24 md:px-12">
       <h1 className="mb-6 font-display text-3xl font-bold tracking-tight text-white">{trimmed ? `Résultats pour « ${trimmed} »` : "Recherchez un titre, un genre…"}</h1>
       {!trimmed && suggestions.length > 0 && (
         <>
           <h2 className="mb-4 font-display text-xl font-bold tracking-tight text-white">Recherches populaires</h2>
-          <ProgressiveCardGrid items={suggestions} gridClassName="stagger-children grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7" />
+          <ProgressiveCardGrid items={suggestions} allowNew={allowNew} gridClassName="stagger-children grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7" />
         </>
       )}
       {loading && <SkeletonGrid />}
@@ -89,6 +94,7 @@ export function SearchView() {
         <ProgressiveCardGrid
           key={current.query}
           items={items}
+          allowNew={allowNew}
           gridClassName="stagger-children grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7"
         />
       )}

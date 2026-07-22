@@ -6,6 +6,7 @@ import { useCatalog } from "@/lib/flix/useCatalog";
 import { useStateStore } from "@/store/state";
 import { useUiStore } from "@/store/ui";
 import { sortByAddedDesc, type CatalogItem } from "@/lib/flix/rows";
+import { newBadgeMeaningful } from "@/lib/flix/format";
 import { ProgressiveCardGrid } from "./ProgressiveCardGrid";
 import { EmptyState } from "./EmptyState";
 
@@ -20,6 +21,8 @@ export function MyListView() {
     return sortByAddedDesc(all);
   }, [movies, shows, myList]);
 
+  const allowNew = useMemo(() => newBadgeMeaningful([...movies, ...shows]), [movies, shows]);
+
   return (
     <div className="min-h-screen px-4 pb-20 pt-24 md:px-12">
       <h1 className="mb-6 font-display text-3xl font-bold tracking-tight text-white">Ma liste</h1>
@@ -33,7 +36,7 @@ export function MyListView() {
           onAction={() => navigate("home")}
         />
       ) : (
-        <ProgressiveCardGrid items={items} gridClassName="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7" />
+        <ProgressiveCardGrid items={items} allowNew={allowNew} gridClassName="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7" />
       )}
     </div>
   );

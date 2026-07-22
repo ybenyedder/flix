@@ -13,13 +13,13 @@
 // deliberately avoiding an effect that resets state when a prop changes,
 // which react-hooks/set-state-in-effect flags as a footgun.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { X, Play, Plus, Check, Eye, ThumbsUp, ThumbsDown } from "lucide-react";
 import { api } from "@/lib/flix/api";
 import type { MovieDetail, ShowDetail } from "@/lib/flix/types";
 import { qualityLabel, versionLabel } from "@/lib/flix/quality";
-import { formatDuration } from "@/lib/flix/format";
+import { formatDuration, newBadgeMeaningful } from "@/lib/flix/format";
 import { relatedItems } from "@/lib/flix/rows";
 import { hasResumePoint, showHasResume } from "@/lib/flix/playerLogic";
 import { useUiStore, type DetailTarget } from "@/store/ui";
@@ -43,6 +43,8 @@ function DetailModalContent({ target }: { target: DetailTarget }) {
   const notify = useUiStore((s) => s.notify);
   const openPlayer = usePlayerStore((s) => s.open);
   const { movies, shows } = useCatalog();
+  // Same "Nouveau" suppression as everywhere else for the « Plus comme ça » grid.
+  const relatedAllowNew = useMemo(() => newBadgeMeaningful([...movies, ...shows]), [movies, shows]);
 
   const inMyList = useStateStore((s) => s.isInMyList(target.type, target.id));
   const toggleMyList = useStateStore((s) => s.toggleMyList);
@@ -293,7 +295,7 @@ function DetailModalContent({ target }: { target: DetailTarget }) {
               <div>
                 <div className="mb-3 flex flex-wrap items-center gap-3 text-sm text-muted">
                   {detail.year && <span className="font-semibold text-white/90">{detail.year}</span>}
-                  {detail.contentRating && <span className="rounded-full border border-white/30 px-1.5 py-0.5 text-xs">{detail.contentRating}</span>}
+                  {detail.contentRating && <span className="rounded-full glass px-2 py-0.5 text-[11px] font-semibold">{detail.contentRating}</span>}
                   {/* duration = 0 means "ffprobe failed", not a 0-minute film */}
                   {detail.type === "movie" ? (
                     detail.duration > 0 && <span>{formatDuration(detail.duration)}</span>
@@ -302,8 +304,8 @@ function DetailModalContent({ target }: { target: DetailTarget }) {
                       {detail.seasonCount} saison{detail.seasonCount > 1 ? "s" : ""}
                     </span>
                   )}
-                  {label && <span className="rounded-full border border-white/30 px-1.5 py-0.5 text-xs">{label}</span>}
-                  {detail.quality.hdr && <span className="rounded-full border border-white/30 px-1.5 py-0.5 text-xs">HDR</span>}
+                  {label && <span className="rounded-full glass px-2 py-0.5 text-[11px] font-semibold">{label}</span>}
+                  {detail.quality.hdr && <span className="rounded-full glass px-2 py-0.5 text-[11px] font-semibold">HDR</span>}
                 </div>
                 {detail.type === "movie" && detail.tagline && <p className="mb-2 text-sm italic text-muted">{detail.tagline}</p>}
                 {detail.synopsis && <p className="text-sm text-white">{detail.synopsis}</p>}
@@ -373,7 +375,7 @@ function DetailModalContent({ target }: { target: DetailTarget }) {
                 <h3 className="mb-4 text-lg font-semibold text-white">Plus comme ça</h3>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                   {related.map((item) => (
-                    <Card key={`${item.type}-${item.id}`} item={item} />
+                    <Card key={`${item.type}-${item.id}`} item={item} allowNew={relatedAllowNew} />
                   ))}
                 </div>
               </div>

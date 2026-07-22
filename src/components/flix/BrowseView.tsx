@@ -21,6 +21,7 @@ import {
   type BrowseSort,
   type CatalogItem,
 } from "@/lib/flix/rows";
+import { newBadgeMeaningful } from "@/lib/flix/format";
 import { ProgressiveCardGrid } from "./ProgressiveCardGrid";
 
 const SORT_OPTIONS: { id: BrowseSort; label: string }[] = [
@@ -76,6 +77,9 @@ function BrowseInner({ kind }: { kind: "movie" | "show" }) {
   const sortOptions = kind === "movie" ? SORT_OPTIONS : SORT_OPTIONS.filter((o) => o.id !== "duration");
 
   const items = useMemo(() => sortBrowseItems(applyBrowseFilters(base, filters, seen), sort), [base, filters, seen, sort]);
+  // Match Home: suppress "Nouveau" when new titles aren't a minority of the
+  // whole library (over movies+shows, not just this kind — one library, one rule).
+  const allowNew = useMemo(() => newBadgeMeaningful([...movies, ...shows]), [movies, shows]);
 
   const toggleGenre = (genre: string) =>
     setFilters((f) => ({ ...f, genres: f.genres.includes(genre) ? f.genres.filter((g) => g !== genre) : [...f.genres, genre] }));
@@ -169,6 +173,7 @@ function BrowseInner({ kind }: { kind: "movie" | "show" }) {
         <ProgressiveCardGrid
           key={`${sort}|${filters.decade ?? ""}|${filters.unseenOnly}|${filters.fourK}|${filters.hdr}|${filters.genres.join(",")}`}
           items={items}
+          allowNew={allowNew}
           gridClassName="stagger-children grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7"
         />
       )}

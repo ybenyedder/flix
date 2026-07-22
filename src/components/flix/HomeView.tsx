@@ -16,7 +16,7 @@ import { useProfileStore } from "@/store/profile";
 import { useArrStore } from "@/store/arr";
 import { useUiStore } from "@/store/ui";
 import { sortByAddedDesc, buildGenreRows, type CatalogItem } from "@/lib/flix/rows";
-import { isNew } from "@/lib/flix/format";
+import { newBadgeMeaningful } from "@/lib/flix/format";
 import type { RecoRow } from "@/lib/flix/types";
 import { BillboardHero } from "./BillboardHero";
 import { Row } from "./Row";
@@ -128,10 +128,7 @@ export function HomeView() {
   // first-import state), where a pill on every tile is pure noise that undoes
   // the caption-less wall of artwork. Suppress it on the home rows until new
   // titles are a minority (≤ 1/3 of the catalogue); a lone new title still flags.
-  const homeAllowNew = useMemo(() => {
-    if (all.length === 0) return true;
-    return all.filter((i) => isNew(i.addedAt)).length <= all.length / 3;
-  }, [all]);
+  const homeAllowNew = useMemo(() => newBadgeMeaningful(all), [all]);
 
   const top10MoviesRow = recoRows.find((r) => r.id === "top10-movies");
   const top10ShowsRow = recoRows.find((r) => r.id === "top10-shows");
