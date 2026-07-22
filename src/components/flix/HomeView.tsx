@@ -7,7 +7,7 @@
 // zero watch history should still see a populated, if impersonal, Home.
 
 import { useMemo } from "react";
-import { DownloadCloud } from "lucide-react";
+import { DownloadCloud, FolderOpen, AlertTriangle } from "lucide-react";
 import { useCatalog } from "@/lib/flix/useCatalog";
 import { useLibraryStore } from "@/store/library";
 import { useStateStore } from "@/store/state";
@@ -23,6 +23,7 @@ import { Card } from "./Card";
 import { Top10Card } from "./Top10Card";
 import { ContinueWatchingCard } from "./ContinueWatchingCard";
 import { SkeletonHero, SkeletonRow } from "./Skeletons";
+import { EmptyState } from "./EmptyState";
 
 const GENRE_ROWS = 3;
 const GENRE_ROW_SIZE = 20;
@@ -170,16 +171,14 @@ export function HomeView() {
   // keep the previous catalogue on failure), so a retry button is enough.
   if (status === "error") {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-lg font-semibold text-white">Bibliothèque indisponible</p>
-        <p className="text-sm text-muted">{libraryError ?? "Le serveur n'a pas répondu."}</p>
-        <button
-          type="button"
-          onClick={() => void useLibraryStore.getState().load()}
-          className="mt-2 rounded-field bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover"
-        >
-          Réessayer
-        </button>
+      <div className="flex min-h-screen items-center justify-center px-6">
+        <EmptyState
+          icon={<AlertTriangle className="size-6" />}
+          title="Bibliothèque indisponible"
+          description={libraryError ?? "Le serveur n'a pas répondu."}
+          actionLabel="Réessayer"
+          onAction={() => void useLibraryStore.getState().load()}
+        />
       </div>
     );
   }
@@ -188,9 +187,12 @@ export function HomeView() {
     return (
       <div>
         <ArrPromoBanner topOffset />
-        <div className="flex min-h-screen flex-col items-center justify-center gap-2 px-6 text-center">
-          <p className="text-lg font-semibold text-white">Bibliothèque vide</p>
-          <p className="text-sm text-muted">Ajoutez des films ou des séries dans le dossier vidéo configuré, puis relancez une analyse.</p>
+        <div className="flex min-h-screen items-center justify-center px-6">
+          <EmptyState
+            icon={<FolderOpen className="size-6" />}
+            title="Bibliothèque vide"
+            description="Ajoutez des films ou des séries dans le dossier vidéo configuré, puis relancez une analyse."
+          />
         </div>
       </div>
     );

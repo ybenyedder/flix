@@ -108,6 +108,25 @@
   }
 }
 
+/* Player transport control — the transparent round buttons over the <video>
+ * (back/play/seek/volume/captions/fullscreen). Same tactile language as the
+ * rest of the app: brighten + grow on hover, press-down on :active. */
+@utility player-btn {
+  border-radius: 9999px;
+  padding: 0.375rem;
+  color: #fff;
+  transition:
+    transform 0.15s var(--ease-out-quart),
+    background-color 0.15s var(--ease-out-quart);
+  &:hover {
+    background: rgb(255 255 255 / 0.12);
+    transform: scale(1.1);
+  }
+  &:active {
+    transform: scale(0.9);
+  }
+}
+
 /* Full-page ambient: the app is a dark room that stays lit as you scroll — a
  * cool light source high on the screen and a soft vignette on the floor, both
  * fixed to the viewport so the "room light" never scrolls away. The solid base
