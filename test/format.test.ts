@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatDuration, isNew, NEW_BADGE_WINDOW_MS } from "../src/lib/flix/format";
+import { formatDuration, isNew, newBadgeMeaningful, NEW_BADGE_WINDOW_MS } from "../src/lib/flix/format";
 
 test("formatDuration renders hours only once they're non-zero, never negative", () => {
   assert.equal(formatDuration(0), "0 min");
@@ -29,4 +29,20 @@ test("isNew: strictly under 14 days, unknown addedAt never new, future timestamp
   assert.equal(isNew(now - 30 * day, now), false);
   assert.equal(isNew(0, now), false); // scanner default for "unknown"
   assert.equal(isNew(now + 60_000, now), true); // slight clock skew stays new
+});
+
+test("newBadgeMeaningful: badge shown only when new titles are a minority (<= 1/3)", () => {
+  const now = Date.UTC(2026, 6, 3, 12, 0, 0);
+  const day = 24 * 3600 * 1000;
+  const fresh = { addedAt: now }; // isNew
+  const old = { addedAt: now - 30 * day }; // not new
+  const unknown = { addedAt: 0 }; // scanner default, never new
+
+  assert.equal(newBadgeMeaningful([], now), true); // nothing to judge -> don't suppress
+  assert.equal(newBadgeMeaningful([old, old, unknown], now), true); // 0 new
+  assert.equal(newBadgeMeaningful([fresh, old, old], now), true); // 1/3 new -> boundary, still meaningful
+  assert.equal(newBadgeMeaningful([fresh, fresh, old], now), false); // 2/3 new -> noise, suppress
+  assert.equal(newBadgeMeaningful([fresh, fresh, fresh], now), false); // 100% new (first import) -> suppress
+  assert.equal(newBadgeMeaningful([fresh, fresh, old, old, old, old], now), true); // 2/6 = 1/3 -> meaningful
+  assert.equal(newBadgeMeaningful([fresh, fresh, fresh, old, old, old], now), false); // 3/6 = 1/2 > 1/3 -> suppress
 });
